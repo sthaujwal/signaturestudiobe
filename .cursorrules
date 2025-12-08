@@ -1,0 +1,32 @@
+# BFF Service Rules for AI Assistant
+
+## Critical Terminology
+- ALWAYS use "User" - NEVER use "RecipientSigner" or "Recipient" in backend code
+- Database table is `users` (NOT `recipient_signers` or `recipients`)
+- Entity class is `User` (NOT `RecipientSigner` or `Recipient`)
+- API endpoints use `/users` (NOT `/recipient-signers` or `/recipients`)
+
+## Database
+- Use Oracle Database for all persistence
+- Spring Session stored in Oracle DB (Spring Session JDBC)
+- Transaction metadata in Oracle DB
+
+## Architecture
+- Spring Boot BFF service
+- Session management via Spring Session (Oracle)
+- CSRF protection enabled
+- Mock Ping authentication (will integrate real Ping later)
+- Integrates with: eSignature Backend, Alert Service, Branding Service
+
+## Code Style
+- Use Java naming conventions
+- Use DTOs for API requests/responses
+- Validate all inputs
+- Handle service integration failures gracefully
+- Log transaction state changes
+
+## Key Patterns
+- Store transaction metadata locally for fast queries
+- Sync with eSignature backend asynchronously
+- Account-based data filtering
+
