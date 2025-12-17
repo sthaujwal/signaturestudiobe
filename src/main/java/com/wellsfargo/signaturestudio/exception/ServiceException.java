@@ -1,6 +1,10 @@
 package com.wellsfargo.signaturestudio.exception;
 
-public class ServiceException extends RuntimeException {
+/**
+ * Service layer exception for business logic errors.
+ * Extends AbstractException to follow application exception hierarchy.
+ */
+public class ServiceException extends AbstractException {
     
     private final ErrorCode errorCode;
     private final String detailMessage;

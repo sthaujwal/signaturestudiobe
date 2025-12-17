@@ -1,5 +1,7 @@
 package com.wellsfargo.signaturestudio.config;
 
+import com.wellsfargo.signaturestudio.exception.ErrorCode;
+import com.wellsfargo.signaturestudio.exception.ServiceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,7 +50,7 @@ public class LdapConfig {
             logger.info("LDAP context source configured successfully for URL: {}", ldapUrl);
         } catch (Exception e) {
             logger.error("Failed to configure LDAP context source", e);
-            throw new RuntimeException("LDAP configuration failed", e);
+            throw new ServiceException(ErrorCode.INTERNAL_ERROR, "LDAP configuration failed", e);
         }
         
         return contextSource;
