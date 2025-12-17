@@ -1,14 +1,14 @@
 package com.wellsfargo.signaturestudio.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public class SessionDTO {
     private String sessionId;
     private String username;
     private String email;
     private String accountId;
-    private LocalDateTime createdAt;
-    private LocalDateTime expiresAt;
+    private Instant createdAt;
+    private Instant expiresAt;
     
     // Getters and Setters
     public String getSessionId() {
@@ -43,19 +43,19 @@ public class SessionDTO {
         this.accountId = accountId;
     }
     
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
     
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
     
-    public LocalDateTime getExpiresAt() {
+    public Instant getExpiresAt() {
         return expiresAt;
     }
     
-    public void setExpiresAt(LocalDateTime expiresAt) {
+    public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
     }
 }

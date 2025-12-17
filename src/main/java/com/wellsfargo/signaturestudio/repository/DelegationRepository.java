@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,7 +20,7 @@ public interface DelegationRepository extends JpaRepository<Delegation, String> 
            "AND d.startDate <= :now")
     List<Delegation> findActiveDelegationsByDelegator(
             @Param("delegatorUserId") String delegatorUserId,
-            @Param("now") LocalDateTime now);
+            @Param("now") Instant now);
     
     // Find active delegations where user is a delegate
     @Query("SELECT d FROM Delegation d WHERE d.delegateUserId = :delegateUserId " +
@@ -29,7 +29,7 @@ public interface DelegationRepository extends JpaRepository<Delegation, String> 
            "AND d.startDate <= :now")
     List<Delegation> findActiveDelegationsByDelegate(
             @Param("delegateUserId") String delegateUserId,
-            @Param("now") LocalDateTime now);
+            @Param("now") Instant now);
     
     // Find all delegations for a delegator (active and inactive)
     List<Delegation> findByDelegatorUserId(String delegatorUserId);
@@ -46,7 +46,7 @@ public interface DelegationRepository extends JpaRepository<Delegation, String> 
     List<Delegation> findActiveDelegationsByDelegatorAndAccount(
             @Param("delegatorUserId") String delegatorUserId,
             @Param("accountId") String accountId,
-            @Param("now") LocalDateTime now);
+            @Param("now") Instant now);
     
     // Find delegations by status
     List<Delegation> findByStatus(String status);

@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * Service for managing Spring Session operations.
@@ -62,9 +62,9 @@ public class SessionService {
         // Calculate times
         Long loginTime = (Long) session.getAttribute(SessionConstants.LOGIN_TIME);
         if (loginTime != null) {
-            sessionDTO.setCreatedAt(LocalDateTime.ofInstant(
-                java.time.Instant.ofEpochMilli(loginTime), java.time.ZoneId.systemDefault()));
-            sessionDTO.setExpiresAt(sessionDTO.getCreatedAt().plusSeconds(SessionConstants.SESSION_TIMEOUT_SECONDS));
+            Instant createdAt = Instant.ofEpochMilli(loginTime);
+            sessionDTO.setCreatedAt(createdAt);
+            sessionDTO.setExpiresAt(createdAt.plusSeconds(SessionConstants.SESSION_TIMEOUT_SECONDS));
         }
         
         return sessionDTO;

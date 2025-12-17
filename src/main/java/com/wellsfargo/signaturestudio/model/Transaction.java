@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.model;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,7 +42,7 @@ public class Transaction {
     private String documentUrl;
     
     @Column(name = "due_date")
-    private LocalDateTime dueDate;
+    private Instant dueDate;
     
     @Column(length = 20)
     private String priority; // low, medium, high
@@ -57,10 +57,10 @@ public class Transaction {
     private String formType; // contract, agreement, application, disclosure, etc.
     
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private Instant createdAt;
     
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
     
     @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<User> users = new ArrayList<>();
@@ -70,13 +70,13 @@ public class Transaction {
     
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        createdAt = Instant.now();
+        updatedAt = Instant.now();
     }
     
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = Instant.now();
     }
     
     // Getters and Setters
@@ -168,11 +168,11 @@ public class Transaction {
         this.documentUrl = documentUrl;
     }
     
-    public LocalDateTime getDueDate() {
+    public Instant getDueDate() {
         return dueDate;
     }
     
-    public void setDueDate(LocalDateTime dueDate) {
+    public void setDueDate(Instant dueDate) {
         this.dueDate = dueDate;
     }
     
@@ -208,19 +208,19 @@ public class Transaction {
         this.formType = formType;
     }
     
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
     
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
     
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
     
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
     

@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -25,7 +25,7 @@ public class TransactionEventDTO {
     private String previousStatus; // Previous status before change
     
     @JsonProperty("timestamp")
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     
     @JsonProperty("userId")
     private String userId; // User who triggered the event
@@ -80,11 +80,11 @@ public class TransactionEventDTO {
         this.previousStatus = previousStatus;
     }
     
-    public LocalDateTime getTimestamp() {
+    public Instant getTimestamp() {
         return timestamp;
     }
     
-    public void setTimestamp(LocalDateTime timestamp) {
+    public void setTimestamp(Instant timestamp) {
         this.timestamp = timestamp;
     }
     

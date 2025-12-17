@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public class ICMPDTO {
@@ -8,8 +8,8 @@ public class ICMPDTO {
     private String documentId;
     private String icmpType;
     private String systemOfRecord;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
     private List<ICMPAttributeDTO> attributes;
     private List<ICMPRelationshipDTO> relationships;
     
@@ -46,19 +46,19 @@ public class ICMPDTO {
         this.systemOfRecord = systemOfRecord;
     }
     
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
     
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
     
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
     
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
     

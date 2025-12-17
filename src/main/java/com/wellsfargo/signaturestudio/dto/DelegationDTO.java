@@ -3,7 +3,7 @@ package com.wellsfargo.signaturestudio.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public class DelegationDTO {
     private String id;
@@ -28,9 +28,9 @@ public class DelegationDTO {
     private String description;
     
     @NotNull(message = "Start date is required")
-    private LocalDateTime startDate;
+    private Instant startDate;
     
-    private LocalDateTime endDate; // null for permanent delegations
+    private Instant endDate; // null for permanent delegations
     
     private String status; // active, expired, cancelled
     
@@ -39,9 +39,9 @@ public class DelegationDTO {
     
     private String createdBy;
     
-    private LocalDateTime createdAt;
+    private Instant createdAt;
     
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
     
     // Getters and Setters
     public String getId() {
@@ -100,19 +100,19 @@ public class DelegationDTO {
         this.description = description;
     }
     
-    public LocalDateTime getStartDate() {
+    public Instant getStartDate() {
         return startDate;
     }
     
-    public void setStartDate(LocalDateTime startDate) {
+    public void setStartDate(Instant startDate) {
         this.startDate = startDate;
     }
     
-    public LocalDateTime getEndDate() {
+    public Instant getEndDate() {
         return endDate;
     }
     
-    public void setEndDate(LocalDateTime endDate) {
+    public void setEndDate(Instant endDate) {
         this.endDate = endDate;
     }
     
@@ -140,19 +140,19 @@ public class DelegationDTO {
         this.createdBy = createdBy;
     }
     
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
     
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
     
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
     
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
 }

@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -44,7 +44,7 @@ public class DelegationService {
     
     private void validateNoOverlappingDelegations(DelegationDTO dto) {
         List<Delegation> existingDelegations = delegationRepository.findActiveDelegationsByDelegator(
-            dto.getDelegatorUserId(), LocalDateTime.now());
+            dto.getDelegatorUserId(), Instant.now());
         
         if (existingDelegations.isEmpty()) {
             return;
@@ -61,12 +61,12 @@ public class DelegationService {
     }
     
     private boolean hasDateOverlap(DelegationDTO newDelegation, Delegation existing) {
-        LocalDateTime newStart = newDelegation.getStartDate();
-        LocalDateTime newEnd = newDelegation.getEndDate();
-        LocalDateTime existingStart = existing.getStartDate();
-        LocalDateTime existingEnd = existing.getEndDate() != null 
+        Instant newStart = newDelegation.getStartDate();
+        Instant newEnd = newDelegation.getEndDate();
+        Instant existingStart = existing.getStartDate();
+        Instant existingEnd = existing.getEndDate() != null 
             ? existing.getEndDate() 
-            : LocalDateTime.now().plusYears(100);
+            : Instant.now().plusSeconds(31536000L * 100); // 100 years in seconds
         
         return (newStart.isBefore(existingEnd) && newStart.isAfter(existingStart)) ||
                (newEnd != null && newEnd.isAfter(existingStart) && 
@@ -110,10 +110,10 @@ public class DelegationService {
         List<Delegation> delegations;
         if (accountId != null) {
             delegations = delegationRepository.findActiveDelegationsByDelegatorAndAccount(
-                    delegatorUserId, accountId, LocalDateTime.now());
+                    delegatorUserId, accountId, Instant.now());
         } else {
             delegations = delegationRepository.findActiveDelegationsByDelegator(
-                    delegatorUserId, LocalDateTime.now());
+                    delegatorUserId, Instant.now());
         }
         return delegations.stream()
                 .map(this::toDTO)
@@ -122,7 +122,7 @@ public class DelegationService {
     
     public List<DelegationDTO> getActiveDelegationsByDelegate(String delegateUserId) {
         List<Delegation> delegations = delegationRepository.findActiveDelegationsByDelegate(
-                delegateUserId, LocalDateTime.now());
+                delegateUserId, Instant.now());
         return delegations.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
@@ -164,7 +164,7 @@ public class DelegationService {
     
     @Transactional
     public void expireDelegations() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         List<Delegation> expiredDelegations = delegationRepository.findByStatus("active").stream()
                 .filter(d -> d.getEndDate() != null && d.getEndDate().isBefore(now))
                 .collect(Collectors.toList());
@@ -186,10 +186,10 @@ public class DelegationService {
         List<Delegation> delegations;
         if (accountId != null) {
             delegations = delegationRepository.findActiveDelegationsByDelegatorAndAccount(
-                    delegatorUserId, accountId, LocalDateTime.now());
+                    delegatorUserId, accountId, Instant.now());
         } else {
             delegations = delegationRepository.findActiveDelegationsByDelegator(
-                    delegatorUserId, LocalDateTime.now());
+                    delegatorUserId, Instant.now());
         }
         
         return delegations.stream()
@@ -204,10 +204,10 @@ public class DelegationService {
         List<Delegation> delegations;
         if (accountId != null) {
             delegations = delegationRepository.findActiveDelegationsByDelegatorAndAccount(
-                    userId, accountId, LocalDateTime.now());
+                    userId, accountId, Instant.now());
         } else {
             delegations = delegationRepository.findActiveDelegationsByDelegator(
-                    userId, LocalDateTime.now());
+                    userId, Instant.now());
         }
         
         // Return the first active delegate, or original user if no delegation

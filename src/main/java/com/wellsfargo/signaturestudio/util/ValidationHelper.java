@@ -3,7 +3,7 @@ package com.wellsfargo.signaturestudio.util;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * Utility class for common validation operations.
@@ -40,7 +40,7 @@ public final class ValidationHelper {
     /**
      * Validates date range - end date must be after start date.
      */
-    public static void validateDateRange(LocalDateTime startDate, LocalDateTime endDate) {
+    public static void validateDateRange(Instant startDate, Instant endDate) {
         if (startDate == null) {
             throw new ServiceException(ErrorCode.VALIDATION_ERROR, "Start date is required");
         }

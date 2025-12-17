@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public class DocumentDTO {
     private String id;
@@ -21,8 +21,8 @@ public class DocumentDTO {
     private String uploadedBy;
     private String uploadStatus;
     private Integer pageCount;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
     
     // These will be populated from ESignatureService when needed
     private java.util.List<FormFieldDTO> formFields;
@@ -157,19 +157,19 @@ public class DocumentDTO {
         this.pageCount = pageCount;
     }
     
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
     
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
     
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
     
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
     

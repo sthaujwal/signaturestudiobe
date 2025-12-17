@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.model;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "delegations")
@@ -28,10 +28,10 @@ public class Delegation {
     private String description; // Additional details
     
     @Column(name = "start_date", nullable = false)
-    private LocalDateTime startDate;
+    private Instant startDate;
     
     @Column(name = "end_date")
-    private LocalDateTime endDate; // null for permanent delegations (left company)
+    private Instant endDate; // null for permanent delegations (left company)
     
     @Column(name = "status", length = 50)
     private String status; // active, expired, cancelled
@@ -43,15 +43,15 @@ public class Delegation {
     private String createdBy; // Who created this delegation record
     
     @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private Instant createdAt;
     
     @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
     
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        createdAt = Instant.now();
+        updatedAt = Instant.now();
         if (status == null) {
             status = "active";
         }
@@ -59,7 +59,7 @@ public class Delegation {
     
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = Instant.now();
     }
     
     // Getters and Setters
@@ -119,19 +119,19 @@ public class Delegation {
         this.description = description;
     }
     
-    public LocalDateTime getStartDate() {
+    public Instant getStartDate() {
         return startDate;
     }
     
-    public void setStartDate(LocalDateTime startDate) {
+    public void setStartDate(Instant startDate) {
         this.startDate = startDate;
     }
     
-    public LocalDateTime getEndDate() {
+    public Instant getEndDate() {
         return endDate;
     }
     
-    public void setEndDate(LocalDateTime endDate) {
+    public void setEndDate(Instant endDate) {
         this.endDate = endDate;
     }
     
@@ -159,19 +159,19 @@ public class Delegation {
         this.createdBy = createdBy;
     }
     
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
     
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
     
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
     
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
 }

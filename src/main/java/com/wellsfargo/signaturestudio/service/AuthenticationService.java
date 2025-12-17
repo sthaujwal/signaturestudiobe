@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * Authentication service with enterprise security best practices.
@@ -52,8 +52,8 @@ public class AuthenticationService {
         // Mock authentication - will be replaced with real Ping integration
         // In production, validate credentials here
         
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expiresAt = now.plusSeconds(SessionConstants.SESSION_TIMEOUT_SECONDS);
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(SessionConstants.SESSION_TIMEOUT_SECONDS);
         
         // Store secure session attributes
         session.setAttribute(SessionConstants.USERNAME, username);

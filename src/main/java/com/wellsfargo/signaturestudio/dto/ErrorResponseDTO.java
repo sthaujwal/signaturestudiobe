@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -9,13 +9,13 @@ public class ErrorResponseDTO {
     private String errorCode;
     private String message;
     private String detailMessage;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private String traceId;
     private Map<String, String> validationErrors;
     private String path;
     
     public ErrorResponseDTO() {
-        this.timestamp = LocalDateTime.now();
+        this.timestamp = Instant.now();
     }
     
     public ErrorResponseDTO(String errorCode, String message) {
@@ -54,11 +54,11 @@ public class ErrorResponseDTO {
         this.detailMessage = detailMessage;
     }
     
-    public LocalDateTime getTimestamp() {
+    public Instant getTimestamp() {
         return timestamp;
     }
     
-    public void setTimestamp(LocalDateTime timestamp) {
+    public void setTimestamp(Instant timestamp) {
         this.timestamp = timestamp;
     }
     

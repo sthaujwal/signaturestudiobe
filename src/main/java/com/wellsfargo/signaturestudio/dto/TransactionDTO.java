@@ -2,7 +2,7 @@ package com.wellsfargo.signaturestudio.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -31,7 +31,7 @@ public class TransactionDTO {
     
     private String documentUrl;
     
-    private LocalDateTime dueDate;
+    private Instant dueDate;
     
     private String priority;
     
@@ -41,9 +41,9 @@ public class TransactionDTO {
     
     private String formType; // contract, agreement, application, disclosure, etc.
     
-    private LocalDateTime createdAt;
+    private Instant createdAt;
     
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
     
     private List<UserDTO> users;
     
@@ -140,11 +140,11 @@ public class TransactionDTO {
         this.documentUrl = documentUrl;
     }
     
-    public LocalDateTime getDueDate() {
+    public Instant getDueDate() {
         return dueDate;
     }
     
-    public void setDueDate(LocalDateTime dueDate) {
+    public void setDueDate(Instant dueDate) {
         this.dueDate = dueDate;
     }
     
@@ -180,19 +180,19 @@ public class TransactionDTO {
         this.formType = formType;
     }
     
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
     
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
     
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
     
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
     
