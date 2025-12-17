@@ -3,6 +3,7 @@ package com.wellsfargo.signaturestudio.controller;
 import com.wellsfargo.signaturestudio.dto.LoginRequestDTO;
 import com.wellsfargo.signaturestudio.dto.SessionDTO;
 import com.wellsfargo.signaturestudio.service.AuthenticationService;
+import com.wellsfargo.signaturestudio.service.SessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -17,9 +18,11 @@ import java.util.Map;
 public class AuthController {
     
     private final AuthenticationService authenticationService;
+    private final SessionService sessionService;
     
-    public AuthController(AuthenticationService authenticationService) {
+    public AuthController(AuthenticationService authenticationService, SessionService sessionService) {
         this.authenticationService = authenticationService;
+        this.sessionService = sessionService;
     }
     
     /**
@@ -46,7 +49,7 @@ public class AuthController {
      */
     @GetMapping("/session")
     public ResponseEntity<SessionDTO> getSession(HttpSession session) {
-        SessionDTO sessionDTO = authenticationService.getSession(session);
+        SessionDTO sessionDTO = sessionService.getSessionInfo(session);
         if (sessionDTO == null) {
             return ResponseEntity.status(401).build();
         }
@@ -75,7 +78,7 @@ public class AuthController {
      */
     @GetMapping("/validate")
     public ResponseEntity<Map<String, Object>> validateSession(HttpServletRequest request) {
-        boolean valid = authenticationService.isSessionValid(request);
+        boolean valid = sessionService.isSessionValid(request);
         return ResponseEntity.ok(Map.of(
             "valid", valid,
             "timestamp", System.currentTimeMillis()

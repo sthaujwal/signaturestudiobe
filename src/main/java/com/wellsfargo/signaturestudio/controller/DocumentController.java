@@ -1,5 +1,7 @@
 package com.wellsfargo.signaturestudio.controller;
 
+import com.wellsfargo.signaturestudio.constants.SessionConstants;
+
 import com.wellsfargo.signaturestudio.dto.DocumentDTO;
 import com.wellsfargo.signaturestudio.dto.FormFieldDTO;
 import com.wellsfargo.signaturestudio.service.DocumentService;
@@ -34,7 +36,7 @@ public class DocumentController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "formFields", required = false) String formFieldsJson,
             HttpSession session) {
-        String uploadedBy = (String) session.getAttribute("username");
+        String uploadedBy = (String) session.getAttribute(SessionConstants.USERNAME);
         if (uploadedBy == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }

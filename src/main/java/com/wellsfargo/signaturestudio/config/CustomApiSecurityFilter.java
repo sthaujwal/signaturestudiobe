@@ -1,5 +1,6 @@
 package com.wellsfargo.signaturestudio.config;
 
+import com.wellsfargo.signaturestudio.constants.SessionConstants;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,15 +33,7 @@ import java.util.Set;
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class CustomApiSecurityFilter extends OncePerRequestFilter {
     
-    private static final Logger logger = LoggerFactory.getLogger(CustomApiSecurityFilter.class);
     private static final Logger auditLogger = LoggerFactory.getLogger("SECURITY_AUDIT");
-    
-    // Session attribute keys
-    private static final String SESSION_USER_KEY = "username";
-    private static final String SESSION_ACCOUNT_KEY = "accountId";
-    private static final String SESSION_AUTHENTICATED_KEY = "authenticated";
-    private static final String SESSION_LOGIN_TIME_KEY = "loginTime";
-    private static final String SESSION_LAST_ACCESS_KEY = "lastAccessTime";
     
     // Paths that require session validation (custom APIs)
     private static final Set<String> PROTECTED_API_PREFIXES = Set.of(
@@ -96,10 +89,10 @@ public class CustomApiSecurityFilter extends OncePerRequestFilter {
             }
             
             // Update last access time for session activity tracking
-            session.setAttribute(SESSION_LAST_ACCESS_KEY, System.currentTimeMillis());
+            session.setAttribute(SessionConstants.LAST_ACCESS_TIME, System.currentTimeMillis());
             
             // Log successful access for audit
-            String username = (String) session.getAttribute(SESSION_USER_KEY);
+            String username = (String) session.getAttribute(SessionConstants.USERNAME);
             auditLogger.info("SECURITY_EVENT | Type: API_ACCESS | User: {} | Path: {} | Method: {} | SessionId: {} | IP: {}",
                 username, requestPath, method, session.getId(), clientIp);
         }
@@ -116,8 +109,8 @@ public class CustomApiSecurityFilter extends OncePerRequestFilter {
      */
     private boolean isSessionAuthenticated(HttpSession session) {
         // Check for required session attributes
-        String username = (String) session.getAttribute(SESSION_USER_KEY);
-        String accountId = (String) session.getAttribute(SESSION_ACCOUNT_KEY);
+        String username = (String) session.getAttribute(SessionConstants.USERNAME);
+        String accountId = (String) session.getAttribute(SessionConstants.ACCOUNT_ID);
         
         if (username == null || username.isEmpty()) {
             return false;
@@ -128,7 +121,7 @@ public class CustomApiSecurityFilter extends OncePerRequestFilter {
         }
         
         // Optional: Check if explicitly marked as authenticated
-        Boolean authenticated = (Boolean) session.getAttribute(SESSION_AUTHENTICATED_KEY);
+        Boolean authenticated = (Boolean) session.getAttribute(SessionConstants.AUTHENTICATED);
         if (authenticated != null && !authenticated) {
             return false;
         }

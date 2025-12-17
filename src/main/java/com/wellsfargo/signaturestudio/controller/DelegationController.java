@@ -1,5 +1,7 @@
 package com.wellsfargo.signaturestudio.controller;
 
+import com.wellsfargo.signaturestudio.constants.SessionConstants;
+
 import com.wellsfargo.signaturestudio.dto.DelegationDTO;
 import com.wellsfargo.signaturestudio.service.DelegationService;
 import jakarta.servlet.http.HttpSession;
@@ -28,7 +30,7 @@ public class DelegationController {
     public ResponseEntity<DelegationDTO> createDelegation(
             @Valid @RequestBody DelegationDTO delegationDTO,
             HttpSession session) {
-        String createdBy = (String) session.getAttribute("username");
+        String createdBy = (String) session.getAttribute(SessionConstants.USERNAME);
         if (createdBy == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }

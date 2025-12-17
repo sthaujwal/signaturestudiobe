@@ -1,5 +1,6 @@
 package com.wellsfargo.signaturestudio.service;
 
+import com.wellsfargo.signaturestudio.constants.SessionConstants;
 import com.wellsfargo.signaturestudio.dto.LoginRequestDTO;
 import com.wellsfargo.signaturestudio.dto.SessionDTO;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,19 +25,6 @@ public class AuthenticationService {
     
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationService.class);
     private static final Logger auditLogger = LoggerFactory.getLogger("SECURITY_AUDIT");
-    
-    // Session attribute keys
-    public static final String SESSION_USER_KEY = "username";
-    public static final String SESSION_EMAIL_KEY = "email";
-    public static final String SESSION_ACCOUNT_KEY = "accountId";
-    public static final String SESSION_AUTHENTICATED_KEY = "authenticated";
-    public static final String SESSION_LOGIN_TIME_KEY = "loginTime";
-    public static final String SESSION_LAST_ACCESS_KEY = "lastAccessTime";
-    public static final String SESSION_CLIENT_IP_KEY = "clientIp";
-    public static final String SESSION_USER_AGENT_KEY = "userAgent";
-    
-    // Session timeout in seconds (30 minutes)
-    private static final int SESSION_TIMEOUT_SECONDS = 30 * 60;
     
     /**
      * Authenticates user and creates secure session.
@@ -65,18 +53,18 @@ public class AuthenticationService {
         // In production, validate credentials here
         
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expiresAt = now.plusSeconds(SESSION_TIMEOUT_SECONDS);
+        LocalDateTime expiresAt = now.plusSeconds(SessionConstants.SESSION_TIMEOUT_SECONDS);
         
         // Store secure session attributes
-        session.setAttribute(SESSION_USER_KEY, username);
-        session.setAttribute(SESSION_EMAIL_KEY, username + "@wellsfargo.com");
-        session.setAttribute(SESSION_ACCOUNT_KEY, "ACCT_" + username.hashCode());
-        session.setAttribute(SESSION_AUTHENTICATED_KEY, true);
-        session.setAttribute(SESSION_LOGIN_TIME_KEY, System.currentTimeMillis());
-        session.setAttribute(SESSION_LAST_ACCESS_KEY, System.currentTimeMillis());
-        session.setAttribute(SESSION_CLIENT_IP_KEY, clientIp);
-        session.setAttribute(SESSION_USER_AGENT_KEY, userAgent);
-        session.setMaxInactiveInterval(SESSION_TIMEOUT_SECONDS);
+        session.setAttribute(SessionConstants.USERNAME, username);
+        session.setAttribute(SessionConstants.EMAIL, username + "@wellsfargo.com");
+        session.setAttribute(SessionConstants.ACCOUNT_ID, "ACCT_" + username.hashCode());
+        session.setAttribute(SessionConstants.AUTHENTICATED, true);
+        session.setAttribute(SessionConstants.LOGIN_TIME, System.currentTimeMillis());
+        session.setAttribute(SessionConstants.LAST_ACCESS_TIME, System.currentTimeMillis());
+        session.setAttribute(SessionConstants.CLIENT_IP, clientIp);
+        session.setAttribute(SessionConstants.USER_AGENT, userAgent);
+        session.setMaxInactiveInterval(SessionConstants.SESSION_TIMEOUT_SECONDS);
         
         // Build response DTO
         SessionDTO sessionDTO = new SessionDTO();
@@ -105,7 +93,7 @@ public class AuthenticationService {
             return;
         }
         
-        String username = (String) session.getAttribute(SESSION_USER_KEY);
+        String username = (String) session.getAttribute(SessionConstants.USERNAME);
         String sessionId = session.getId();
         String clientIp = getClientIp(request);
         
@@ -120,80 +108,8 @@ public class AuthenticationService {
     }
     
     /**
-     * Gets current session information.
-     */
-    public SessionDTO getSession(HttpSession session) {
-        if (session == null) {
-            return null;
-        }
-        
-        String username = (String) session.getAttribute(SESSION_USER_KEY);
-        if (username == null) {
-            return null;
-        }
-        
-        Boolean authenticated = (Boolean) session.getAttribute(SESSION_AUTHENTICATED_KEY);
-        if (authenticated == null || !authenticated) {
-            return null;
-        }
-        
-        // Update last access time
-        session.setAttribute(SESSION_LAST_ACCESS_KEY, System.currentTimeMillis());
-        
-        SessionDTO sessionDTO = new SessionDTO();
-        sessionDTO.setSessionId(session.getId());
-        sessionDTO.setUsername(username);
-        sessionDTO.setEmail((String) session.getAttribute(SESSION_EMAIL_KEY));
-        sessionDTO.setAccountId((String) session.getAttribute(SESSION_ACCOUNT_KEY));
-        
-        // Calculate times
-        Long loginTime = (Long) session.getAttribute(SESSION_LOGIN_TIME_KEY);
-        if (loginTime != null) {
-            sessionDTO.setCreatedAt(LocalDateTime.ofInstant(
-                java.time.Instant.ofEpochMilli(loginTime), java.time.ZoneId.systemDefault()));
-            sessionDTO.setExpiresAt(sessionDTO.getCreatedAt().plusSeconds(SESSION_TIMEOUT_SECONDS));
-        }
-        
-        return sessionDTO;
-    }
-    
-    /**
-     * Validates if session is still valid and not tampered.
-     */
-    public boolean isSessionValid(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session == null) {
-            return false;
-        }
-        
-        // Check authenticated flag
-        Boolean authenticated = (Boolean) session.getAttribute(SESSION_AUTHENTICATED_KEY);
-        if (authenticated == null || !authenticated) {
-            return false;
-        }
-        
-        // Check username exists
-        String username = (String) session.getAttribute(SESSION_USER_KEY);
-        if (username == null || username.isEmpty()) {
-            return false;
-        }
-        
-        // Optional: Check if client IP changed (session hijacking detection)
-        // This can be disabled if users are behind dynamic proxies
-        String storedIp = (String) session.getAttribute(SESSION_CLIENT_IP_KEY);
-        String currentIp = getClientIp(request);
-        if (storedIp != null && !storedIp.equals(currentIp)) {
-            auditLogger.warn("SECURITY_EVENT | Type: IP_MISMATCH | User: {} | StoredIP: {} | CurrentIP: {} | SessionId: {}",
-                username, storedIp, currentIp, session.getId());
-            // Uncomment to enforce IP binding (may cause issues with mobile users):
-            // return false;
-        }
-        
-        return true;
-    }
-    
-    /**
      * Gets client IP address, handling proxies.
+     * Used during login for session security tracking.
      */
     private String getClientIp(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");

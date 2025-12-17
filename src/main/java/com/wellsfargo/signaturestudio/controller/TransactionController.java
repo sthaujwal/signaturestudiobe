@@ -1,5 +1,6 @@
 package com.wellsfargo.signaturestudio.controller;
 
+import com.wellsfargo.signaturestudio.constants.SessionConstants;
 import com.wellsfargo.signaturestudio.dto.PaginatedResponseDTO;
 import com.wellsfargo.signaturestudio.dto.TransactionDTO;
 import com.wellsfargo.signaturestudio.service.TransactionService;
@@ -48,7 +49,7 @@ public class TransactionController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDirection,
             HttpSession session) {
-        String userId = (String) session.getAttribute("username");
+        String userId = (String) session.getAttribute(SessionConstants.USERNAME);
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -65,7 +66,7 @@ public class TransactionController {
     public ResponseEntity<List<TransactionDTO>> getTransactions(
             @RequestParam(required = false) String accountId,
             HttpSession session) {
-        String createdBy = (String) session.getAttribute("username");
+        String createdBy = (String) session.getAttribute(SessionConstants.USERNAME);
         List<TransactionDTO> transactions = transactionService.getTransactions(accountId, createdBy);
         return ResponseEntity.ok(transactions);
     }
@@ -82,7 +83,7 @@ public class TransactionController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDirection,
             HttpSession session) {
-        String createdBy = (String) session.getAttribute("username");
+        String createdBy = (String) session.getAttribute(SessionConstants.USERNAME);
         PaginatedResponseDTO<TransactionDTO> response = transactionService.getTransactionsPaginated(
                 accountId, createdBy, search, page, size, sortBy, sortDirection);
         return ResponseEntity.ok(response);
@@ -92,8 +93,8 @@ public class TransactionController {
     public ResponseEntity<TransactionDTO> createTransaction(
             @Valid @RequestBody TransactionDTO transactionDTO,
             HttpSession session) {
-        String createdBy = (String) session.getAttribute("username");
-        String creatorEmail = (String) session.getAttribute("email");
+        String createdBy = (String) session.getAttribute(SessionConstants.USERNAME);
+        String creatorEmail = (String) session.getAttribute(SessionConstants.EMAIL);
         
         if (createdBy == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
