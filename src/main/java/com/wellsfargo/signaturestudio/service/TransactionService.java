@@ -127,6 +127,11 @@ public class TransactionService {
             return;
         }
         
+        // Note: When creating transactions, users come as UserDTO from TransactionDTO.
+        // For individual user addition, use AddUserRequest which has stricter validation.
+        // Here we validate basic requirements but not externalIdType/authType since
+        // those are specific to AddUserRequest.
+        
         ESignatureIntegrationHelper.executeVoidWithErrorHandling(
             "add users in eSignature service",
             () -> eSignatureServiceClient.addUsers(transaction.getId(), users),

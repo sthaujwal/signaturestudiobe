@@ -26,6 +26,12 @@ public class AuthenticationService {
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationService.class);
     private static final Logger auditLogger = LoggerFactory.getLogger("SECURITY_AUDIT");
     
+    private final AccountService accountService;
+    
+    public AuthenticationService(AccountService accountService) {
+        this.accountService = accountService;
+    }
+    
     /**
      * Authenticates user and creates secure session.
      * Implements session fixation protection by creating new session.
@@ -55,10 +61,14 @@ public class AuthenticationService {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(SessionConstants.SESSION_TIMEOUT_SECONDS);
         
+        // Get default account for user
+        com.wellsfargo.signaturestudio.dto.AccountDTO defaultAccount = accountService.getDefaultAccount(username);
+        String accountId = defaultAccount.getAccountId();
+        
         // Store secure session attributes
         session.setAttribute(SessionConstants.USERNAME, username);
         session.setAttribute(SessionConstants.EMAIL, username + "@wellsfargo.com");
-        session.setAttribute(SessionConstants.ACCOUNT_ID, "ACCT_" + username.hashCode());
+        session.setAttribute(SessionConstants.ACCOUNT_ID, accountId);
         session.setAttribute(SessionConstants.AUTHENTICATED, true);
         session.setAttribute(SessionConstants.LOGIN_TIME, System.currentTimeMillis());
         session.setAttribute(SessionConstants.LAST_ACCESS_TIME, System.currentTimeMillis());
@@ -71,7 +81,7 @@ public class AuthenticationService {
         sessionDTO.setSessionId(newSessionId);
         sessionDTO.setUsername(username);
         sessionDTO.setEmail(username + "@wellsfargo.com");
-        sessionDTO.setAccountId("ACCT_" + username.hashCode());
+        sessionDTO.setAccountId(accountId);
         sessionDTO.setCreatedAt(now);
         sessionDTO.setExpiresAt(expiresAt);
         

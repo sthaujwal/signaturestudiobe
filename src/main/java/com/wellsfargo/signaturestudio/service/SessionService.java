@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Instant;
 
@@ -228,6 +230,189 @@ public class SessionService {
     public String getSessionId(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         return session != null ? session.getId() : null;
+    }
+    
+    /**
+     * Switches the current account in the session.
+     * Updates the accountId in session and logs the switch for audit purposes.
+     * 
+     * @param session The HTTP session
+     * @param newAccountId The new account ID to switch to
+     * @param username The username (for audit logging)
+     * @return The previous account ID, or null if no previous account was set
+     */
+    public String switchAccount(HttpSession session, String newAccountId, String username) {
+        if (session == null) {
+            throw new IllegalArgumentException("Session cannot be null");
+        }
+        
+        String previousAccountId = getAccountId(session);
+        
+        // Update account ID in session
+        session.setAttribute(SessionConstants.ACCOUNT_ID, newAccountId);
+        
+        // Audit log the account switch
+        auditLogger.info("ACCOUNT_SWITCH | User: {} | PreviousAccount: {} | NewAccount: {} | SessionId: {}",
+            username, previousAccountId, newAccountId, session.getId());
+        
+        return previousAccountId;
+    }
+    
+    /**
+     * Switches the current account in the session from HttpServletRequest.
+     * 
+     * @param request The HTTP request
+     * @param newAccountId The new account ID to switch to
+     * @param username The username (for audit logging)
+     * @return The previous account ID, or null if no previous account was set
+     */
+    public String switchAccount(HttpServletRequest request, String newAccountId, String username) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            throw new IllegalStateException("No active session found");
+        }
+        return switchAccount(session, newAccountId, username);
+    }
+    
+    /**
+     * Sets account ID in session (used during login or account switch).
+     * 
+     * @param session The HTTP session
+     * @param accountId The account ID to set
+     */
+    public void setAccountId(HttpSession session, String accountId) {
+        if (session != null) {
+            session.setAttribute(SessionConstants.ACCOUNT_ID, accountId);
+        }
+    }
+    
+    // ============================================
+    // CONVENIENCE METHODS - Use RequestContextHolder
+    // These methods automatically get the current request/session
+    // Use when you don't have HttpSession/HttpServletRequest available
+    // ============================================
+    
+    /**
+     * Gets the current session from RequestContextHolder.
+     * Convenience method when HttpSession is not available as a parameter.
+     * 
+     * @return Current HttpSession or null if not available
+     */
+    private HttpSession getCurrentSession() {
+        ServletRequestAttributes attributes = 
+            (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return null;
+        }
+        return attributes.getRequest().getSession(false);
+    }
+    
+    /**
+     * Gets the current request from RequestContextHolder.
+     * Convenience method when HttpServletRequest is not available as a parameter.
+     * 
+     * @return Current HttpServletRequest or null if not available
+     */
+    private HttpServletRequest getCurrentRequest() {
+        ServletRequestAttributes attributes = 
+            (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return null;
+        }
+        return attributes.getRequest();
+    }
+    
+    /**
+     * Gets current session information using RequestContextHolder.
+     * Convenience method - automatically gets session from current request.
+     * 
+     * @return SessionDTO with session information, or null if session is invalid
+     * @throws IllegalStateException if called outside of a request context
+     */
+    public SessionDTO getCurrentSessionInfo() {
+        HttpSession session = getCurrentSession();
+        if (session == null) {
+            throw new IllegalStateException("No active session found. This method must be called within a request context.");
+        }
+        return getSessionInfo(session);
+    }
+    
+    /**
+     * Gets username from current session using RequestContextHolder.
+     * Convenience method - automatically gets session from current request.
+     * 
+     * @return Username or null if not found
+     * @throws IllegalStateException if called outside of a request context
+     */
+    public String getCurrentUsername() {
+        HttpSession session = getCurrentSession();
+        if (session == null) {
+            return null;
+        }
+        return getUsername(session);
+    }
+    
+    /**
+     * Gets account ID from current session using RequestContextHolder.
+     * Convenience method - automatically gets session from current request.
+     * 
+     * @return Account ID or null if not found
+     * @throws IllegalStateException if called outside of a request context
+     */
+    public String getCurrentAccountId() {
+        HttpSession session = getCurrentSession();
+        if (session == null) {
+            return null;
+        }
+        return getAccountId(session);
+    }
+    
+    /**
+     * Gets email from current session using RequestContextHolder.
+     * Convenience method - automatically gets session from current request.
+     * 
+     * @return Email or null if not found
+     */
+    public String getCurrentEmail() {
+        HttpSession session = getCurrentSession();
+        if (session == null) {
+            return null;
+        }
+        return getEmail(session);
+    }
+    
+    /**
+     * Validates if current session is valid using RequestContextHolder.
+     * Convenience method - automatically gets request from current context.
+     * 
+     * @return true if session is valid, false otherwise
+     */
+    public boolean isCurrentSessionValid() {
+        HttpServletRequest request = getCurrentRequest();
+        if (request == null) {
+            return false;
+        }
+        return isSessionValid(request);
+    }
+    
+    /**
+     * Switches account in current session using RequestContextHolder.
+     * Convenience method - automatically gets session from current request.
+     * 
+     * @param newAccountId The new account ID to switch to
+     * @return The previous account ID, or null if no previous account was set
+     * @throws IllegalStateException if called outside of a request context or no session exists
+     */
+    public String switchCurrentAccount(String newAccountId) {
+        HttpSession session = getCurrentSession();
+        if (session == null) {
+            throw new IllegalStateException("No active session found. This method must be called within a request context.");
+        }
+        String username = getUsername(session);
+        if (username == null) {
+            throw new IllegalStateException("No username found in session");
+        }
+        return switchAccount(session, newAccountId, username);
     }
 }
 

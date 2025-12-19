@@ -1,6 +1,7 @@
 package com.wellsfargo.signaturestudio.service;
 
 import com.wellsfargo.signaturestudio.client.ESignatureServiceClient;
+import com.wellsfargo.signaturestudio.dto.AddUserRequest;
 import com.wellsfargo.signaturestudio.dto.UserDTO;
 import com.wellsfargo.signaturestudio.model.User;
 import com.wellsfargo.signaturestudio.model.Transaction;
@@ -8,6 +9,7 @@ import com.wellsfargo.signaturestudio.repository.UserRepository;
 import com.wellsfargo.signaturestudio.repository.TransactionRepository;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
+import com.wellsfargo.signaturestudio.util.AddRequestValidator;
 import com.wellsfargo.signaturestudio.util.ESignatureIntegrationHelper;
 import com.wellsfargo.signaturestudio.util.UpdateHelper;
 import com.wellsfargo.signaturestudio.util.ValidationHelper;
@@ -46,14 +48,42 @@ public class UserService {
     }
     
     @Transactional
-    public UserDTO addUser(String transactionId, UserDTO dto) {
+    public UserDTO addUser(String transactionId, AddUserRequest request) {
+        // Validate the request
+        AddRequestValidator.validate(request);
+        
         Transaction transaction = findTransaction(transactionId);
+        
+        // Convert AddUserRequest to UserDTO for eSignature service
+        UserDTO dto = toUserDTO(request);
         
         addUserToESignature(transactionId, dto);
         User user = saveUserToDatabase(transaction, dto);
         logger.info("User saved to DB: {} for transaction: {}", user.getId(), transactionId);
         
         return toDTO(user);
+    }
+    
+    /**
+     * Converts AddUserRequest to UserDTO for internal use.
+     * Note: externalIdType and authType are not part of UserDTO,
+     * they are only used during validation.
+     */
+    private UserDTO toUserDTO(AddUserRequest request) {
+        UserDTO dto = new UserDTO();
+        dto.setFirstName(request.getFirstName());
+        dto.setLastName(request.getLastName());
+        dto.setFullName(request.getFullName());
+        dto.setName(request.getName());
+        dto.setEmail(request.getEmail());
+        dto.setPhoneNumber(request.getPhoneNumber());
+        dto.setUniqueId(request.getUniqueId());
+        dto.setExternalId(request.getExternalId());
+        dto.setRole(request.getRole());
+        dto.setSigningOrder(request.getSigningOrder());
+        dto.setType(request.getType());
+        dto.setUserCategory(request.getUserCategory());
+        return dto;
     }
     
     private Transaction findTransaction(String transactionId) {

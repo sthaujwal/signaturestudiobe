@@ -1,5 +1,6 @@
 package com.wellsfargo.signaturestudio.controller;
 
+import com.wellsfargo.signaturestudio.dto.AddUserRequest;
 import com.wellsfargo.signaturestudio.dto.UserDTO;
 import com.wellsfargo.signaturestudio.service.UserService;
 import jakarta.validation.Valid;
@@ -28,8 +29,8 @@ public class UserController {
     @PostMapping
     public ResponseEntity<UserDTO> addUser(
             @PathVariable String transactionId,
-            @Valid @RequestBody UserDTO userDTO) {
-        UserDTO created = userService.addUser(transactionId, userDTO);
+            @Valid @RequestBody AddUserRequest addUserRequest) {
+        UserDTO created = userService.addUser(transactionId, addUserRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
     

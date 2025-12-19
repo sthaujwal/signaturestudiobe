@@ -15,6 +15,7 @@ public enum ErrorCode {
     
     // Authorization Errors (403)
     FORBIDDEN("AUTH_004", "Access forbidden", HttpStatus.FORBIDDEN),
+    ACCESS_DENIED("AUTH_006", "Access denied", HttpStatus.FORBIDDEN),
     INSUFFICIENT_PERMISSIONS("AUTH_005", "Insufficient permissions", HttpStatus.FORBIDDEN),
     
     // Not Found Errors (404)
