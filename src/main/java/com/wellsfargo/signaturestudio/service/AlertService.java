@@ -39,6 +39,16 @@ public class AlertService {
         logger.info("Updating email template: {}", templateId);
         alertServiceClient.updateTemplate(templateId, template);
     }
+    
+    public EmailTemplateDTO createTemplate(EmailTemplateDTO template) {
+        logger.info("Creating email template: {}", template.getName());
+        return alertServiceClient.createTemplate(template);
+    }
+    
+    public void deleteTemplate(String templateId) {
+        logger.info("Deleting email template: {}", templateId);
+        alertServiceClient.deleteTemplate(templateId);
+    }
 }
 
 

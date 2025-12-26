@@ -1,8 +1,8 @@
 package com.wellsfargo.signaturestudio.controller;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
-import com.wellsfargo.signaturestudio.dto.PaginatedResponseDTO;
-import com.wellsfargo.signaturestudio.dto.TransactionDTO;
+import com.wellsfargo.signaturestudio.domain.PaginatedResponse;
+import com.wellsfargo.signaturestudio.domain.Transaction;
 import com.wellsfargo.signaturestudio.service.TransactionService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -41,7 +41,7 @@ public class TransactionController {
      * - "John Doe" - finds transactions mentioning "John Doe"
      */
     @GetMapping("/my-transactions")
-    public ResponseEntity<PaginatedResponseDTO<TransactionDTO>> getMyTransactions(
+    public ResponseEntity<PaginatedResponse<Transaction>> getMyTransactions(
             @RequestParam(required = false) String accountId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
@@ -54,7 +54,7 @@ public class TransactionController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         
-        PaginatedResponseDTO<TransactionDTO> response = transactionService.getTransactionsWithDelegations(
+        PaginatedResponse<Transaction> response = transactionService.getTransactionsWithDelegations(
                 accountId, userId, search, page, size, sortBy, sortDirection);
         return ResponseEntity.ok(response);
     }
@@ -63,11 +63,11 @@ public class TransactionController {
      * Get transactions (legacy endpoint without pagination - kept for backward compatibility)
      */
     @GetMapping
-    public ResponseEntity<List<TransactionDTO>> getTransactions(
+    public ResponseEntity<List<Transaction>> getTransactions(
             @RequestParam(required = false) String accountId,
             HttpSession session) {
         String createdBy = (String) session.getAttribute(SessionConstants.USERNAME);
-        List<TransactionDTO> transactions = transactionService.getTransactions(accountId, createdBy);
+        List<Transaction> transactions = transactionService.getTransactions(accountId, createdBy);
         return ResponseEntity.ok(transactions);
     }
     
@@ -75,7 +75,7 @@ public class TransactionController {
      * Get transactions with pagination and search (without delegation support)
      */
     @GetMapping("/paginated")
-    public ResponseEntity<PaginatedResponseDTO<TransactionDTO>> getTransactionsPaginated(
+    public ResponseEntity<PaginatedResponse<Transaction>> getTransactionsPaginated(
             @RequestParam(required = false) String accountId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
@@ -84,14 +84,14 @@ public class TransactionController {
             @RequestParam(defaultValue = "desc") String sortDirection,
             HttpSession session) {
         String createdBy = (String) session.getAttribute(SessionConstants.USERNAME);
-        PaginatedResponseDTO<TransactionDTO> response = transactionService.getTransactionsPaginated(
+        PaginatedResponse<Transaction> response = transactionService.getTransactionsPaginated(
                 accountId, createdBy, search, page, size, sortBy, sortDirection);
         return ResponseEntity.ok(response);
     }
     
     @PostMapping
-    public ResponseEntity<TransactionDTO> createTransaction(
-            @Valid @RequestBody TransactionDTO transactionDTO,
+    public ResponseEntity<Transaction> createTransaction(
+            @Valid @RequestBody Transaction transactionDTO,
             HttpSession session) {
         String createdBy = (String) session.getAttribute(SessionConstants.USERNAME);
         String creatorEmail = (String) session.getAttribute(SessionConstants.EMAIL);
@@ -105,13 +105,13 @@ public class TransactionController {
             creatorEmail = transactionDTO.getCreatorEmail();
         }
         
-        TransactionDTO created = transactionService.createTransaction(transactionDTO, createdBy, creatorEmail);
+        Transaction created = transactionService.createTransaction(transactionDTO, createdBy, creatorEmail);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
     
     @GetMapping("/{id}")
-    public ResponseEntity<TransactionDTO> getTransaction(@PathVariable String id) {
-        TransactionDTO transaction = transactionService.getTransaction(id);
+    public ResponseEntity<Transaction> getTransaction(@PathVariable String id) {
+        Transaction transaction = transactionService.getTransaction(id);
         return ResponseEntity.ok(transaction);
     }
     
@@ -120,16 +120,16 @@ public class TransactionController {
      * Includes documents, form fields, attributes, and ICMP objects
      */
     @GetMapping("/{id}/details")
-    public ResponseEntity<TransactionDTO> getTransactionDetails(@PathVariable String id) {
-        TransactionDTO transaction = transactionService.getTransactionDetails(id);
+    public ResponseEntity<Transaction> getTransactionDetails(@PathVariable String id) {
+        Transaction transaction = transactionService.getTransactionDetails(id);
         return ResponseEntity.ok(transaction);
     }
     
     @PutMapping("/{id}")
-    public ResponseEntity<TransactionDTO> updateTransaction(
+    public ResponseEntity<Transaction> updateTransaction(
             @PathVariable String id,
-            @Valid @RequestBody TransactionDTO transactionDTO) {
-        TransactionDTO updated = transactionService.updateTransaction(id, transactionDTO);
+            @Valid @RequestBody Transaction transactionDTO) {
+        Transaction updated = transactionService.updateTransaction(id, transactionDTO);
         return ResponseEntity.ok(updated);
     }
     

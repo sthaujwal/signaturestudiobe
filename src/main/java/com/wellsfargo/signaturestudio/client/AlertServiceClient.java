@@ -93,5 +93,37 @@ public class AlertServiceClient {
             throw new RuntimeException("Failed to update email template", e);
         }
     }
+    
+    public EmailTemplateDTO createTemplate(EmailTemplateDTO template) {
+        try {
+            String url = baseUrl + "/api/v1/templates";
+            logger.info("Calling Alert service to create template: {}", url);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json");
+            HttpEntity<EmailTemplateDTO> request = new HttpEntity<>(template, headers);
+            
+            ResponseEntity<EmailTemplateDTO> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, EmailTemplateDTO.class);
+            logger.info("Template created successfully");
+            return response.getBody();
+        } catch (RestClientException e) {
+            logger.error("Error calling Alert service to create template", e);
+            throw new RuntimeException("Failed to create email template", e);
+        }
+    }
+    
+    public void deleteTemplate(String templateId) {
+        try {
+            String url = baseUrl + "/api/v1/templates/" + templateId;
+            logger.info("Calling Alert service to delete template: {}", url);
+            
+            restTemplate.exchange(url, HttpMethod.DELETE, null, Void.class);
+            logger.info("Template deleted successfully: {}", templateId);
+        } catch (RestClientException e) {
+            logger.error("Error calling Alert service to delete template: {}", templateId, e);
+            throw new RuntimeException("Failed to delete email template", e);
+        }
+    }
 }
 
