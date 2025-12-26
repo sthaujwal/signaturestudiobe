@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.util;
 
-import com.wellsfargo.signaturestudio.dto.AddUserRequest;
+import com.wellsfargo.signaturestudio.domain.AddUserRequest;
 import com.wellsfargo.signaturestudio.enums.AuthType;
 import com.wellsfargo.signaturestudio.enums.ExternalIdType;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;

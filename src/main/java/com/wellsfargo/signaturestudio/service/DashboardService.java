@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.service;
 
-import com.wellsfargo.signaturestudio.dto.DashboardStatsDTO;
+import com.wellsfargo.signaturestudio.domain.DashboardStats;
 import com.wellsfargo.signaturestudio.model.Transaction;
 import com.wellsfargo.signaturestudio.repository.TransactionRepository;
 import com.wellsfargo.signaturestudio.repository.DelegationRepository;
@@ -12,7 +12,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
-import com.wellsfargo.signaturestudio.dto.DelegationDTO;
+import com.wellsfargo.signaturestudio.domain.Delegation;
 
 /**
  * Service for dashboard statistics and aggregated data.
@@ -43,7 +43,7 @@ public class DashboardService {
      * @param accountId Optional account ID to filter by
      * @return Dashboard statistics
      */
-    public DashboardStatsDTO getDashboardStats(String userId, String accountId) {
+    public DashboardStats getDashboardStats(String userId, String accountId) {
         logger.info("Getting dashboard stats for user: {}, account: {}", userId, accountId);
         
         // Get user IDs for delegation support (same pattern as TransactionService)
@@ -59,7 +59,7 @@ public class DashboardService {
                 org.springframework.data.domain.Pageable.unpaged()).getContent();
         }
         
-        DashboardStatsDTO stats = new DashboardStatsDTO();
+        DashboardStats stats = new DashboardStats();
         
         // Basic counts
         stats.setTotalTransactions(allTransactions.size());
@@ -142,10 +142,10 @@ public class DashboardService {
         List<String> userIdsToQuery = new ArrayList<>();
         userIdsToQuery.add(userId);
         
-        List<com.wellsfargo.signaturestudio.dto.DelegationDTO> activeDelegations = 
+        List<Delegation> activeDelegations = 
             delegationService.getActiveDelegationsByDelegate(userId);
         
-        for (DelegationDTO delegation : activeDelegations) {
+        for (Delegation delegation : activeDelegations) {
             if (isDelegationApplicable(delegation, accountId)) {
                 userIdsToQuery.add(delegation.getDelegatorUserId());
             }
@@ -154,7 +154,7 @@ public class DashboardService {
         return userIdsToQuery;
     }
     
-    private boolean isDelegationApplicable(DelegationDTO delegation, String accountId) {
+    private boolean isDelegationApplicable(Delegation delegation, String accountId) {
         if (accountId == null || accountId.isEmpty()) {
             return true; // No account filter, include all delegations
         }

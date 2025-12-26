@@ -2,8 +2,8 @@ package com.wellsfargo.signaturestudio.controller;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
 
-import com.wellsfargo.signaturestudio.dto.DocumentDTO;
-import com.wellsfargo.signaturestudio.dto.FormFieldDTO;
+import com.wellsfargo.signaturestudio.domain.Document;
+import com.wellsfargo.signaturestudio.domain.FormField;
 import com.wellsfargo.signaturestudio.service.DocumentService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
@@ -25,13 +25,13 @@ public class DocumentController {
     }
     
     @GetMapping
-    public ResponseEntity<List<DocumentDTO>> getDocuments(@PathVariable String transactionId) {
-        List<DocumentDTO> documents = documentService.getDocuments(transactionId);
+    public ResponseEntity<List<Document>> getDocuments(@PathVariable String transactionId) {
+        List<Document> documents = documentService.getDocuments(transactionId);
         return ResponseEntity.ok(documents);
     }
     
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<DocumentDTO> uploadDocument(
+    public ResponseEntity<Document> uploadDocument(
             @PathVariable String transactionId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "formFields", required = false) String formFieldsJson,
@@ -41,16 +41,16 @@ public class DocumentController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         
-        DocumentDTO document = documentService.uploadDocument(transactionId, file, uploadedBy, formFieldsJson);
+        Document document = documentService.uploadDocument(transactionId, file, uploadedBy, formFieldsJson);
         return ResponseEntity.status(HttpStatus.CREATED).body(document);
     }
     
     @PutMapping("/{documentId}")
-    public ResponseEntity<DocumentDTO> updateDocument(
+    public ResponseEntity<Document> updateDocument(
             @PathVariable String transactionId,
             @PathVariable String documentId,
-            @RequestBody DocumentDTO documentDTO) {
-        DocumentDTO updated = documentService.updateDocument(transactionId, documentId, documentDTO);
+            @RequestBody Document documentDTO) {
+        Document updated = documentService.updateDocument(transactionId, documentId, documentDTO);
         return ResponseEntity.ok(updated);
     }
     
@@ -63,10 +63,10 @@ public class DocumentController {
     }
     
     @GetMapping("/{documentId}")
-    public ResponseEntity<DocumentDTO> getDocument(
+    public ResponseEntity<Document> getDocument(
             @PathVariable String transactionId,
             @PathVariable String documentId) {
-        DocumentDTO document = documentService.getDocumentDetails(transactionId, documentId);
+        Document document = documentService.getDocumentDetails(transactionId, documentId);
         return ResponseEntity.ok(document);
     }
     
@@ -75,10 +75,10 @@ public class DocumentController {
      * Includes form fields and ICMP objects
      */
     @GetMapping("/{documentId}/details")
-    public ResponseEntity<DocumentDTO> getDocumentDetails(
+    public ResponseEntity<Document> getDocumentDetails(
             @PathVariable String transactionId,
             @PathVariable String documentId) {
-        DocumentDTO document = documentService.getDocumentDetails(transactionId, documentId);
+        Document document = documentService.getDocumentDetails(transactionId, documentId);
         return ResponseEntity.ok(document);
     }
     
@@ -100,10 +100,10 @@ public class DocumentController {
      * Fetches form fields from ESignatureService
      */
     @GetMapping("/{documentId}/form-fields")
-    public ResponseEntity<List<FormFieldDTO>> getFormFields(
+    public ResponseEntity<List<FormField>> getFormFields(
             @PathVariable String transactionId,
             @PathVariable String documentId) {
-        List<FormFieldDTO> formFields = documentService.getFormFields(transactionId, documentId);
+        List<FormField> formFields = documentService.getFormFields(transactionId, documentId);
         return ResponseEntity.ok(formFields);
     }
     
@@ -112,11 +112,11 @@ public class DocumentController {
      * Sends form fields to ESignatureService via changeDocuments
      */
     @PutMapping("/{documentId}/form-fields")
-    public ResponseEntity<DocumentDTO> updateFormFields(
+    public ResponseEntity<Document> updateFormFields(
             @PathVariable String transactionId,
             @PathVariable String documentId,
-            @RequestBody List<FormFieldDTO> formFields) {
-        DocumentDTO updated = documentService.updateFormFields(transactionId, documentId, formFields);
+            @RequestBody List<FormField> formFields) {
+        Document updated = documentService.updateFormFields(transactionId, documentId, formFields);
         return ResponseEntity.ok(updated);
     }
 }

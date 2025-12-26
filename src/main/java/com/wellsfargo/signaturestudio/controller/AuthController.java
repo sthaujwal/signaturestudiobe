@@ -1,7 +1,10 @@
 package com.wellsfargo.signaturestudio.controller;
 
-import com.wellsfargo.signaturestudio.dto.LoginRequestDTO;
-import com.wellsfargo.signaturestudio.dto.SessionDTO;
+import com.wellsfargo.signaturestudio.domain.AccountWithRole;
+import com.wellsfargo.signaturestudio.domain.AuthUser;
+import com.wellsfargo.signaturestudio.domain.LoginRequest;
+import com.wellsfargo.signaturestudio.domain.Session;
+import com.wellsfargo.signaturestudio.service.AccountService;
 import com.wellsfargo.signaturestudio.service.AuthenticationService;
 import com.wellsfargo.signaturestudio.service.SessionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -19,19 +23,23 @@ public class AuthController {
     
     private final AuthenticationService authenticationService;
     private final SessionService sessionService;
+    private final AccountService accountService;
     
-    public AuthController(AuthenticationService authenticationService, SessionService sessionService) {
+    public AuthController(AuthenticationService authenticationService, 
+                         SessionService sessionService,
+                         AccountService accountService) {
         this.authenticationService = authenticationService;
         this.sessionService = sessionService;
+        this.accountService = accountService;
     }
     
     /**
      * Login endpoint - creates new session with session fixation protection.
      */
     @PostMapping("/login")
-    public ResponseEntity<SessionDTO> login(@Valid @RequestBody LoginRequestDTO loginRequest, 
+    public ResponseEntity<Session> login(@Valid @RequestBody LoginRequest loginRequest, 
                                             HttpServletRequest request) {
-        SessionDTO sessionDTO = authenticationService.login(loginRequest, request);
+        Session sessionDTO = authenticationService.login(loginRequest, request);
         return ResponseEntity.ok(sessionDTO);
     }
     
@@ -48,8 +56,8 @@ public class AuthController {
      * Get current session information.
      */
     @GetMapping("/session")
-    public ResponseEntity<SessionDTO> getSession(HttpSession session) {
-        SessionDTO sessionDTO = sessionService.getSessionInfo(session);
+    public ResponseEntity<Session> getSession(HttpSession session) {
+        Session sessionDTO = sessionService.getSessionInfo(session);
         if (sessionDTO == null) {
             return ResponseEntity.status(401).build();
         }
@@ -83,6 +91,25 @@ public class AuthController {
             "valid", valid,
             "timestamp", System.currentTimeMillis()
         ));
+    }
+    
+    /**
+     * Authenticated endpoint - receives AuthUser object from Auth0 with roles.
+     * Parses roles to extract accounts and user's role in each account.
+     * 
+     * Role format: DPD_SIGNATURE_STUDIO_{ACCOUNT_KEY}_{ROLE}
+     * Examples:
+     * - DPD_SIGNATURE_STUDIO_TEST_ADMIN -> Account: TEST, Role: ADMIN
+     * - DPD_SIGNATURE_STUDIO_TEST2_SENDER -> Account: TEST2, Role: SENDER
+     * - DPD_SIGNATURE_STUDIO_TEST_READ_ONLY -> Account: TEST, Role: READ_ONLY
+     * 
+     * @param authUser The authenticated user with roles from Auth0
+     * @return List of accounts with user's role in each account
+     */
+    @PostMapping("/authenticated")
+    public ResponseEntity<List<AccountWithRole>> authenticated(@Valid @RequestBody AuthUser authUser) {
+        List<AccountWithRole> accountsWithRoles = accountService.getAccountsWithRoles(authUser);
+        return ResponseEntity.ok(accountsWithRoles);
     }
 }
 

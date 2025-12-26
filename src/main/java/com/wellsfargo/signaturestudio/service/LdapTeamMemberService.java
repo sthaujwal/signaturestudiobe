@@ -1,8 +1,8 @@
 package com.wellsfargo.signaturestudio.service;
 
 import com.wellsfargo.signaturestudio.config.LdapConfig;
-import com.wellsfargo.signaturestudio.dto.TeamMemberDTO;
-import com.wellsfargo.signaturestudio.dto.TeamMemberSearchRequestDTO;
+import com.wellsfargo.signaturestudio.domain.TeamMember;
+import com.wellsfargo.signaturestudio.domain.TeamMemberSearchRequest;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
 import org.slf4j.Logger;
@@ -39,7 +39,7 @@ public class LdapTeamMemberService {
      * @param searchRequest Search request with query and max results
      * @return List of team members matching the search criteria
      */
-    public List<TeamMemberDTO> searchTeamMembers(TeamMemberSearchRequestDTO searchRequest) {
+    public List<TeamMember> searchTeamMembers(TeamMemberSearchRequest searchRequest) {
         String query = searchRequest.getQuery().trim();
         int maxResults = searchRequest.getMaxResults();
         
@@ -55,7 +55,7 @@ public class LdapTeamMemberService {
                 .filter(searchFilter);
             
             // Execute search and map results
-            List<TeamMemberDTO> teamMembers = ldapTemplate.search(ldapQuery, new TeamMemberAttributesMapper());
+            List<TeamMember> teamMembers = ldapTemplate.search(ldapQuery, new TeamMemberAttributesMapper());
             
             // Limit results manually if needed
             if (teamMembers.size() > maxResults) {
@@ -135,13 +135,13 @@ public class LdapTeamMemberService {
     }
     
     /**
-     * Attributes mapper to convert LDAP attributes to TeamMemberDTO.
+     * Attributes mapper to convert LDAP attributes to TeamMember.
      */
-    private static class TeamMemberAttributesMapper implements AttributesMapper<TeamMemberDTO> {
+    private static class TeamMemberAttributesMapper implements AttributesMapper<TeamMember> {
         
         @Override
-        public TeamMemberDTO mapFromAttributes(Attributes attributes) throws NamingException {
-            TeamMemberDTO teamMember = new TeamMemberDTO();
+        public TeamMember mapFromAttributes(Attributes attributes) throws NamingException {
+            TeamMember teamMember = new TeamMember();
             
             // sAMAccountName (username)
             teamMember.setUsername(getAttributeValue(attributes, "sAMAccountName"));

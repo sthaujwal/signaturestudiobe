@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.config;
 
-import com.wellsfargo.signaturestudio.dto.TransactionEventDTO;
+import com.wellsfargo.signaturestudio.domain.TransactionEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
@@ -34,7 +34,7 @@ public class KafkaConfig {
     private String groupId;
     
     @Bean
-    public ConsumerFactory<String, TransactionEventDTO> consumerFactory() {
+    public ConsumerFactory<String, TransactionEvent> consumerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -45,7 +45,7 @@ public class KafkaConfig {
         
         // Trust all packages for JSON deserialization (adjust for production)
         props.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
-        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, TransactionEventDTO.class);
+        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, TransactionEvent.class);
         
         logger.info("Kafka consumer factory configured with bootstrap servers: {}, group ID: {}", 
                 bootstrapServers, groupId);
@@ -54,8 +54,8 @@ public class KafkaConfig {
     }
     
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, TransactionEventDTO> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, TransactionEventDTO> factory =
+    public ConcurrentKafkaListenerContainerFactory<String, TransactionEvent> kafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, TransactionEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
         

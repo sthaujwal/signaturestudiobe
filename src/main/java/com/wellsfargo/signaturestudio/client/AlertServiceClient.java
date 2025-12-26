@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.client;
 
-import com.wellsfargo.signaturestudio.dto.AlertRequestDTO;
-import com.wellsfargo.signaturestudio.dto.EmailTemplateDTO;
+import com.wellsfargo.signaturestudio.domain.AlertRequest;
+import com.wellsfargo.signaturestudio.domain.EmailTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,14 +31,14 @@ public class AlertServiceClient {
         this.baseUrl = baseUrl;
     }
     
-    public void sendAlert(AlertRequestDTO alertRequest) {
+    public void sendAlert(AlertRequest alertRequest) {
         try {
             String url = baseUrl + "/api/v1/alerts/send";
             logger.info("Calling Alert service to send alert: {}", url);
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
-            HttpEntity<AlertRequestDTO> request = new HttpEntity<>(alertRequest, headers);
+            HttpEntity<AlertRequest> request = new HttpEntity<>(alertRequest, headers);
             
             restTemplate.exchange(url, HttpMethod.POST, request, Void.class);
             logger.info("Alert sent successfully to: {}", alertRequest.getRecipientEmail());
@@ -48,14 +48,14 @@ public class AlertServiceClient {
         }
     }
     
-    public List<EmailTemplateDTO> getTemplates() {
+    public List<EmailTemplate> getTemplates() {
         try {
             String url = baseUrl + "/api/v1/templates";
             logger.info("Calling Alert service to get templates: {}", url);
             
-            ResponseEntity<List<EmailTemplateDTO>> response = restTemplate.exchange(
+            ResponseEntity<List<EmailTemplate>> response = restTemplate.exchange(
                     url, HttpMethod.GET, null, 
-                    new ParameterizedTypeReference<List<EmailTemplateDTO>>() {});
+                    new ParameterizedTypeReference<List<EmailTemplate>>() {});
             
             return response.getBody();
         } catch (RestClientException e) {
@@ -64,12 +64,12 @@ public class AlertServiceClient {
         }
     }
     
-    public EmailTemplateDTO getTemplate(String templateId) {
+    public EmailTemplate getTemplate(String templateId) {
         try {
             String url = baseUrl + "/api/v1/templates/" + templateId;
             logger.info("Calling Alert service to get template: {}", url);
             
-            ResponseEntity<EmailTemplateDTO> response = restTemplate.getForEntity(url, EmailTemplateDTO.class);
+            ResponseEntity<EmailTemplate> response = restTemplate.getForEntity(url, EmailTemplate.class);
             return response.getBody();
         } catch (RestClientException e) {
             logger.error("Error calling Alert service to get template: {}", templateId, e);
@@ -77,14 +77,14 @@ public class AlertServiceClient {
         }
     }
     
-    public void updateTemplate(String templateId, EmailTemplateDTO template) {
+    public void updateTemplate(String templateId, EmailTemplate template) {
         try {
             String url = baseUrl + "/api/v1/templates/" + templateId;
             logger.info("Calling Alert service to update template: {}", url);
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
-            HttpEntity<EmailTemplateDTO> request = new HttpEntity<>(template, headers);
+            HttpEntity<EmailTemplate> request = new HttpEntity<>(template, headers);
             
             restTemplate.exchange(url, HttpMethod.PUT, request, Void.class);
             logger.info("Template updated successfully: {}", templateId);
@@ -94,17 +94,17 @@ public class AlertServiceClient {
         }
     }
     
-    public EmailTemplateDTO createTemplate(EmailTemplateDTO template) {
+    public EmailTemplate createTemplate(EmailTemplate template) {
         try {
             String url = baseUrl + "/api/v1/templates";
             logger.info("Calling Alert service to create template: {}", url);
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
-            HttpEntity<EmailTemplateDTO> request = new HttpEntity<>(template, headers);
+            HttpEntity<EmailTemplate> request = new HttpEntity<>(template, headers);
             
-            ResponseEntity<EmailTemplateDTO> response = restTemplate.exchange(
-                    url, HttpMethod.POST, request, EmailTemplateDTO.class);
+            ResponseEntity<EmailTemplate> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, EmailTemplate.class);
             logger.info("Template created successfully");
             return response.getBody();
         } catch (RestClientException e) {

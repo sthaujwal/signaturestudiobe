@@ -1,8 +1,8 @@
 package com.wellsfargo.signaturestudio.service;
 
 import com.wellsfargo.signaturestudio.client.ESignatureServiceClient;
-import com.wellsfargo.signaturestudio.dto.AddUserRequest;
-import com.wellsfargo.signaturestudio.dto.UserDTO;
+import com.wellsfargo.signaturestudio.domain.AddUserRequest;
+import com.wellsfargo.signaturestudio.domain.User;
 import com.wellsfargo.signaturestudio.model.User;
 import com.wellsfargo.signaturestudio.model.Transaction;
 import com.wellsfargo.signaturestudio.repository.UserRepository;
@@ -40,7 +40,7 @@ public class UserService {
         this.eSignatureServiceClient = eSignatureServiceClient;
     }
     
-    public List<UserDTO> getUsers(String transactionId) {
+    public List<User> getUsers(String transactionId) {
         List<User> users = userRepository.findByTransactionIdOrderBySigningOrderAsc(transactionId);
         return users.stream()
                 .map(this::toDTO)
@@ -48,14 +48,14 @@ public class UserService {
     }
     
     @Transactional
-    public UserDTO addUser(String transactionId, AddUserRequest request) {
+    public User addUser(String transactionId, AddUserRequest request) {
         // Validate the request
         AddRequestValidator.validate(request);
         
         Transaction transaction = findTransaction(transactionId);
         
-        // Convert AddUserRequest to UserDTO for eSignature service
-        UserDTO dto = toUserDTO(request);
+        // Convert AddUserRequest to User for eSignature service
+        User dto = toUser(request);
         
         addUserToESignature(transactionId, dto);
         User user = saveUserToDatabase(transaction, dto);
@@ -65,12 +65,12 @@ public class UserService {
     }
     
     /**
-     * Converts AddUserRequest to UserDTO for internal use.
-     * Note: externalIdType and authType are not part of UserDTO,
+     * Converts AddUserRequest to User for internal use.
+     * Note: externalIdType and authType are not part of User,
      * they are only used during validation.
      */
-    private UserDTO toUserDTO(AddUserRequest request) {
-        UserDTO dto = new UserDTO();
+    private User toUser(AddUserRequest request) {
+        User dto = new User();
         dto.setFirstName(request.getFirstName());
         dto.setLastName(request.getLastName());
         dto.setFullName(request.getFullName());
@@ -92,8 +92,8 @@ public class UserService {
                 "Transaction ID: " + transactionId));
     }
     
-    private void addUserToESignature(String transactionId, UserDTO dto) {
-        List<UserDTO> usersToAdd = List.of(dto);
+    private void addUserToESignature(String transactionId, User dto) {
+        List<User> usersToAdd = List.of(dto);
         ESignatureIntegrationHelper.executeVoidWithErrorHandling(
             "add user in eSignature service",
             () -> eSignatureServiceClient.addUsers(transactionId, usersToAdd),
@@ -101,12 +101,12 @@ public class UserService {
         );
     }
     
-    private User saveUserToDatabase(Transaction transaction, UserDTO dto) {
+    private User saveUserToDatabase(Transaction transaction, User dto) {
         User user = buildUserEntity(dto, transaction);
         return userRepository.save(user);
     }
     
-    private User buildUserEntity(UserDTO dto, Transaction transaction) {
+    private User buildUserEntity(User dto, Transaction transaction) {
         User user = new User();
         user.setId(UUID.randomUUID().toString());
         user.setTransaction(transaction);
@@ -126,7 +126,7 @@ public class UserService {
     }
     
     @Transactional
-    public UserDTO updateUser(String transactionId, String userId, UserDTO dto) {
+    public User updateUser(String transactionId, String userId, User dto) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ServiceException(ErrorCode.USER_NOT_FOUND, 
                 "User ID: " + userId));
@@ -146,8 +146,8 @@ public class UserService {
         return toDTO(saved);
     }
     
-    private void updateUserInESignature(String transactionId, UserDTO dto, String userId) {
-        List<UserDTO> usersToChange = List.of(dto);
+    private void updateUserInESignature(String transactionId, User dto, String userId) {
+        List<User> usersToChange = List.of(dto);
         ESignatureIntegrationHelper.executeVoidWithErrorHandling(
             "change user in eSignature service",
             () -> eSignatureServiceClient.changeUsers(transactionId, usersToChange),
@@ -155,7 +155,7 @@ public class UserService {
         );
     }
     
-    private void updateUserFields(User user, UserDTO dto) {
+    private void updateUserFields(User user, User dto) {
         UpdateHelper.setIfNotNull(dto.getFirstName(), user::setFirstName);
         UpdateHelper.setIfNotNull(dto.getLastName(), user::setLastName);
         UpdateHelper.setIfNotNull(dto.getFullName(), user::setFullName);
@@ -196,8 +196,8 @@ public class UserService {
         );
     }
     
-    private UserDTO toDTO(User user) {
-        UserDTO dto = new UserDTO();
+    private User toDTO(User user) {
+        User dto = new User();
         dto.setId(user.getId());
         dto.setFirstName(user.getFirstName());
         dto.setLastName(user.getLastName());

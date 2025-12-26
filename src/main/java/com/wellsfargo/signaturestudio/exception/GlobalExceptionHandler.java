@@ -2,7 +2,7 @@ package com.wellsfargo.signaturestudio.exception;
 
 import com.wellsfargo.signaturestudio.config.TraceContext;
 import com.wellsfargo.signaturestudio.config.TraceContextFilter;
-import com.wellsfargo.signaturestudio.dto.ErrorResponseDTO;
+import com.wellsfargo.signaturestudio.domain.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,11 +23,11 @@ public class GlobalExceptionHandler {
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     
     @ExceptionHandler(ServiceException.class)
-    public ResponseEntity<ErrorResponseDTO> handleServiceException(ServiceException ex, WebRequest request) {
+    public ResponseEntity<ErrorResponse> handleServiceException(ServiceException ex, WebRequest request) {
         ErrorCode errorCode = ex.getErrorCode();
         logger.error("Service exception: {} - {}", errorCode.getCode(), ex.getMessage(), ex);
         
-        ErrorResponseDTO errorResponse = new ErrorResponseDTO(
+        ErrorResponse errorResponse = new ErrorResponse(
             errorCode.getCode(),
             errorCode.getMessage(),
             ex.getDetailMessage()
@@ -39,7 +39,7 @@ public class GlobalExceptionHandler {
     }
     
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponseDTO> handleValidationExceptions(
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(
             MethodArgumentNotValidException ex, WebRequest request) {
         Map<String, String> validationErrors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
             validationErrors.put(fieldName, errorMessage);
         });
         
-        ErrorResponseDTO errorResponse = new ErrorResponseDTO(
+        ErrorResponse errorResponse = new ErrorResponse(
             ErrorCode.VALIDATION_ERROR.getCode(),
             ErrorCode.VALIDATION_ERROR.getMessage()
         );
@@ -62,10 +62,10 @@ public class GlobalExceptionHandler {
     }
     
     @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ErrorResponseDTO> handleRuntimeException(RuntimeException ex, WebRequest request) {
+    public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex, WebRequest request) {
         logger.error("Runtime exception occurred", ex);
         
-        ErrorResponseDTO errorResponse = new ErrorResponseDTO(
+        ErrorResponse errorResponse = new ErrorResponse(
             ErrorCode.INTERNAL_ERROR.getCode(),
             ErrorCode.INTERNAL_ERROR.getMessage(),
             ex.getMessage()
@@ -77,10 +77,10 @@ public class GlobalExceptionHandler {
     }
     
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponseDTO> handleGenericException(Exception ex, WebRequest request) {
+    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex, WebRequest request) {
         logger.error("Unexpected exception occurred", ex);
         
-        ErrorResponseDTO errorResponse = new ErrorResponseDTO(
+        ErrorResponse errorResponse = new ErrorResponse(
             ErrorCode.UNEXPECTED_ERROR.getCode(),
             ErrorCode.UNEXPECTED_ERROR.getMessage()
         );

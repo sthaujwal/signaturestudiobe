@@ -2,7 +2,7 @@ package com.wellsfargo.signaturestudio.controller;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
 
-import com.wellsfargo.signaturestudio.dto.DelegationDTO;
+import com.wellsfargo.signaturestudio.domain.Delegation;
 import com.wellsfargo.signaturestudio.service.DelegationService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -27,8 +27,8 @@ public class DelegationController {
     }
     
     @PostMapping
-    public ResponseEntity<DelegationDTO> createDelegation(
-            @Valid @RequestBody DelegationDTO delegationDTO,
+    public ResponseEntity<Delegation> createDelegation(
+            @Valid @RequestBody Delegation delegationDTO,
             HttpSession session) {
         String createdBy = (String) session.getAttribute(SessionConstants.USERNAME);
         if (createdBy == null) {
@@ -37,17 +37,17 @@ public class DelegationController {
         
         logger.info("Creating delegation from {} to {}", 
                 delegationDTO.getDelegatorUserId(), delegationDTO.getDelegateUserId());
-        DelegationDTO created = delegationService.createDelegation(delegationDTO, createdBy);
+        Delegation created = delegationService.createDelegation(delegationDTO, createdBy);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
     
     @GetMapping("/delegator/{delegatorUserId}")
-    public ResponseEntity<List<DelegationDTO>> getDelegationsByDelegator(
+    public ResponseEntity<List<Delegation>> getDelegationsByDelegator(
             @PathVariable String delegatorUserId,
             @RequestParam(required = false) String accountId) {
         logger.info("Fetching delegations for delegator: {} with account: {}", delegatorUserId, accountId);
         
-        List<DelegationDTO> delegations;
+        List<Delegation> delegations;
         if (accountId != null) {
             delegations = delegationService.getActiveDelegationsByDelegator(delegatorUserId, accountId);
         } else {
@@ -58,36 +58,36 @@ public class DelegationController {
     }
     
     @GetMapping("/delegate/{delegateUserId}")
-    public ResponseEntity<List<DelegationDTO>> getDelegationsByDelegate(
+    public ResponseEntity<List<Delegation>> getDelegationsByDelegate(
             @PathVariable String delegateUserId) {
         logger.info("Fetching delegations for delegate: {}", delegateUserId);
-        List<DelegationDTO> delegations = delegationService.getDelegationsByDelegate(delegateUserId);
+        List<Delegation> delegations = delegationService.getDelegationsByDelegate(delegateUserId);
         return ResponseEntity.ok(delegations);
     }
     
     @GetMapping("/active/delegator/{delegatorUserId}")
-    public ResponseEntity<List<DelegationDTO>> getActiveDelegationsByDelegator(
+    public ResponseEntity<List<Delegation>> getActiveDelegationsByDelegator(
             @PathVariable String delegatorUserId,
             @RequestParam(required = false) String accountId) {
         logger.info("Fetching active delegations for delegator: {} with account: {}", delegatorUserId, accountId);
-        List<DelegationDTO> delegations = delegationService.getActiveDelegationsByDelegator(delegatorUserId, accountId);
+        List<Delegation> delegations = delegationService.getActiveDelegationsByDelegator(delegatorUserId, accountId);
         return ResponseEntity.ok(delegations);
     }
     
     @GetMapping("/active/delegate/{delegateUserId}")
-    public ResponseEntity<List<DelegationDTO>> getActiveDelegationsByDelegate(
+    public ResponseEntity<List<Delegation>> getActiveDelegationsByDelegate(
             @PathVariable String delegateUserId) {
         logger.info("Fetching active delegations for delegate: {}", delegateUserId);
-        List<DelegationDTO> delegations = delegationService.getActiveDelegationsByDelegate(delegateUserId);
+        List<Delegation> delegations = delegationService.getActiveDelegationsByDelegate(delegateUserId);
         return ResponseEntity.ok(delegations);
     }
     
     @PutMapping("/{id}")
-    public ResponseEntity<DelegationDTO> updateDelegation(
+    public ResponseEntity<Delegation> updateDelegation(
             @PathVariable String id,
-            @Valid @RequestBody DelegationDTO delegationDTO) {
+            @Valid @RequestBody Delegation delegationDTO) {
         logger.info("Updating delegation: {}", id);
-        DelegationDTO updated = delegationService.updateDelegation(id, delegationDTO);
+        Delegation updated = delegationService.updateDelegation(id, delegationDTO);
         return ResponseEntity.ok(updated);
     }
     

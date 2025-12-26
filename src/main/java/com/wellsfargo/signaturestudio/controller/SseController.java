@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.controller;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
-import com.wellsfargo.signaturestudio.dto.TransactionEventDTO;
+import com.wellsfargo.signaturestudio.domain.TransactionEvent;
 import com.wellsfargo.signaturestudio.service.SseService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;

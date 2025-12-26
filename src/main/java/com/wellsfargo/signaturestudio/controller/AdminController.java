@@ -1,9 +1,9 @@
 package com.wellsfargo.signaturestudio.controller;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
-import com.wellsfargo.signaturestudio.dto.AccountSettingsDTO;
-import com.wellsfargo.signaturestudio.dto.EmailTemplateDTO;
-import com.wellsfargo.signaturestudio.dto.NotificationSettingsDTO;
+import com.wellsfargo.signaturestudio.domain.AccountSettings;
+import com.wellsfargo.signaturestudio.domain.EmailTemplate;
+import com.wellsfargo.signaturestudio.domain.NotificationSettings;
 import com.wellsfargo.signaturestudio.service.AdminService;
 import com.wellsfargo.signaturestudio.service.AlertService;
 import jakarta.servlet.http.HttpSession;
@@ -34,7 +34,7 @@ public class AdminController {
      * Get account settings for the current account
      */
     @GetMapping("/settings/account")
-    public ResponseEntity<AccountSettingsDTO> getAccountSettings(
+    public ResponseEntity<AccountSettings> getAccountSettings(
             @RequestParam(required = false) String accountId,
             HttpSession session) {
         String userId = (String) session.getAttribute(SessionConstants.USERNAME);
@@ -45,7 +45,7 @@ public class AdminController {
         String currentAccountId = accountId != null ? accountId : 
             (String) session.getAttribute(SessionConstants.ACCOUNT_ID);
         
-        AccountSettingsDTO settings = adminService.getAccountSettings(currentAccountId);
+        AccountSettings settings = adminService.getAccountSettings(currentAccountId);
         return ResponseEntity.ok(settings);
     }
     
@@ -55,7 +55,7 @@ public class AdminController {
     @PutMapping("/settings/account")
     public ResponseEntity<Void> updateAccountSettings(
             @RequestParam(required = false) String accountId,
-            @Valid @RequestBody AccountSettingsDTO settings,
+            @Valid @RequestBody AccountSettings settings,
             HttpSession session) {
         String userId = (String) session.getAttribute(SessionConstants.USERNAME);
         if (userId == null) {
@@ -73,7 +73,7 @@ public class AdminController {
      * Get notification settings for the current account
      */
     @GetMapping("/settings/notifications")
-    public ResponseEntity<NotificationSettingsDTO> getNotificationSettings(
+    public ResponseEntity<NotificationSettings> getNotificationSettings(
             @RequestParam(required = false) String accountId,
             HttpSession session) {
         String userId = (String) session.getAttribute(SessionConstants.USERNAME);
@@ -84,7 +84,7 @@ public class AdminController {
         String currentAccountId = accountId != null ? accountId : 
             (String) session.getAttribute(SessionConstants.ACCOUNT_ID);
         
-        NotificationSettingsDTO settings = adminService.getNotificationSettings(currentAccountId);
+        NotificationSettings settings = adminService.getNotificationSettings(currentAccountId);
         return ResponseEntity.ok(settings);
     }
     
@@ -94,7 +94,7 @@ public class AdminController {
     @PutMapping("/settings/notifications")
     public ResponseEntity<Void> updateNotificationSettings(
             @RequestParam(required = false) String accountId,
-            @Valid @RequestBody NotificationSettingsDTO settings,
+            @Valid @RequestBody NotificationSettings settings,
             HttpSession session) {
         String userId = (String) session.getAttribute(SessionConstants.USERNAME);
         if (userId == null) {
@@ -112,8 +112,8 @@ public class AdminController {
      * Get all email templates
      */
     @GetMapping("/templates")
-    public ResponseEntity<List<EmailTemplateDTO>> getEmailTemplates() {
-        List<EmailTemplateDTO> templates = alertService.getTemplates();
+    public ResponseEntity<List<EmailTemplate>> getEmailTemplates() {
+        List<EmailTemplate> templates = alertService.getTemplates();
         return ResponseEntity.ok(templates);
     }
     
@@ -121,8 +121,8 @@ public class AdminController {
      * Get a specific email template
      */
     @GetMapping("/templates/{id}")
-    public ResponseEntity<EmailTemplateDTO> getEmailTemplate(@PathVariable String id) {
-        EmailTemplateDTO template = alertService.getTemplate(id);
+    public ResponseEntity<EmailTemplate> getEmailTemplate(@PathVariable String id) {
+        EmailTemplate template = alertService.getTemplate(id);
         return ResponseEntity.ok(template);
     }
     
@@ -130,9 +130,9 @@ public class AdminController {
      * Create a new email template
      */
     @PostMapping("/templates")
-    public ResponseEntity<EmailTemplateDTO> createEmailTemplate(
-            @Valid @RequestBody EmailTemplateDTO template) {
-        EmailTemplateDTO created = alertService.createTemplate(template);
+    public ResponseEntity<EmailTemplate> createEmailTemplate(
+            @Valid @RequestBody EmailTemplate template) {
+        EmailTemplate created = alertService.createTemplate(template);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
     
@@ -142,7 +142,7 @@ public class AdminController {
     @PutMapping("/templates/{id}")
     public ResponseEntity<Void> updateEmailTemplate(
             @PathVariable String id,
-            @Valid @RequestBody EmailTemplateDTO template) {
+            @Valid @RequestBody EmailTemplate template) {
         alertService.updateTemplate(id, template);
         return ResponseEntity.ok().build();
     }

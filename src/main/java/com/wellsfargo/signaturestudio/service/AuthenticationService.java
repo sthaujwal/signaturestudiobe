@@ -1,8 +1,8 @@
 package com.wellsfargo.signaturestudio.service;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
-import com.wellsfargo.signaturestudio.dto.LoginRequestDTO;
-import com.wellsfargo.signaturestudio.dto.SessionDTO;
+import com.wellsfargo.signaturestudio.domain.LoginRequest;
+import com.wellsfargo.signaturestudio.domain.Session;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
@@ -36,7 +36,7 @@ public class AuthenticationService {
      * Authenticates user and creates secure session.
      * Implements session fixation protection by creating new session.
      */
-    public SessionDTO login(LoginRequestDTO loginRequest, HttpServletRequest request) {
+    public Session login(LoginRequest loginRequest, HttpServletRequest request) {
         String username = loginRequest.getUsername();
         String clientIp = getClientIp(request);
         String userAgent = request.getHeader("User-Agent");
@@ -62,7 +62,7 @@ public class AuthenticationService {
         Instant expiresAt = now.plusSeconds(SessionConstants.SESSION_TIMEOUT_SECONDS);
         
         // Get default account for user
-        com.wellsfargo.signaturestudio.dto.AccountDTO defaultAccount = accountService.getDefaultAccount(username);
+        com.wellsfargo.signaturestudio.domain.Account defaultAccount = accountService.getDefaultAccount(username);
         String accountId = defaultAccount.getAccountId();
         
         // Store secure session attributes
@@ -77,7 +77,7 @@ public class AuthenticationService {
         session.setMaxInactiveInterval(SessionConstants.SESSION_TIMEOUT_SECONDS);
         
         // Build response DTO
-        SessionDTO sessionDTO = new SessionDTO();
+        Session sessionDTO = new Session();
         sessionDTO.setSessionId(newSessionId);
         sessionDTO.setUsername(username);
         sessionDTO.setEmail(username + "@wellsfargo.com");

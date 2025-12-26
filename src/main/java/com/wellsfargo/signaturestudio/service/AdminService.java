@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.service;
 
-import com.wellsfargo.signaturestudio.dto.AccountSettingsDTO;
-import com.wellsfargo.signaturestudio.dto.NotificationSettingsDTO;
+import com.wellsfargo.signaturestudio.domain.AccountSettings;
+import com.wellsfargo.signaturestudio.domain.NotificationSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -20,11 +20,11 @@ public class AdminService {
      * In a real implementation, this would fetch from a database.
      * For now, returns default settings.
      */
-    public AccountSettingsDTO getAccountSettings(String accountId) {
+    public AccountSettings getAccountSettings(String accountId) {
         logger.info("Getting account settings for account: {}", accountId);
         
         // TODO: Fetch from database or configuration service
-        AccountSettingsDTO settings = new AccountSettingsDTO();
+        AccountSettings settings = new AccountSettings();
         settings.setCompanyName("Wells Fargo & Company");
         settings.setDefaultDueDays(7);
         settings.setRequireAuthentication(true);
@@ -39,7 +39,7 @@ public class AdminService {
      * Update account settings.
      * In a real implementation, this would save to a database.
      */
-    public void updateAccountSettings(String accountId, AccountSettingsDTO settings) {
+    public void updateAccountSettings(String accountId, AccountSettings settings) {
         logger.info("Updating account settings for account: {}", accountId);
         // TODO: Save to database or configuration service
     }
@@ -48,11 +48,11 @@ public class AdminService {
      * Get notification settings for an account.
      * In a real implementation, this would fetch from a database.
      */
-    public NotificationSettingsDTO getNotificationSettings(String accountId) {
+    public NotificationSettings getNotificationSettings(String accountId) {
         logger.info("Getting notification settings for account: {}", accountId);
         
         // TODO: Fetch from database or configuration service
-        NotificationSettingsDTO settings = new NotificationSettingsDTO();
+        NotificationSettings settings = new NotificationSettings();
         settings.setEmailNotifications(true);
         settings.setSmsNotifications(false);
         settings.setReminderFrequency("daily");
@@ -66,7 +66,7 @@ public class AdminService {
      * Update notification settings.
      * In a real implementation, this would save to a database.
      */
-    public void updateNotificationSettings(String accountId, NotificationSettingsDTO settings) {
+    public void updateNotificationSettings(String accountId, NotificationSettings settings) {
         logger.info("Updating notification settings for account: {}", accountId);
         // TODO: Save to database or configuration service
     }

@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.listener;
 
-import com.wellsfargo.signaturestudio.dto.TransactionEventDTO;
+import com.wellsfargo.signaturestudio.domain.TransactionEvent;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
 import com.wellsfargo.signaturestudio.model.Transaction;
@@ -39,7 +39,7 @@ public class ESignatureEventListener {
     )
     @Transactional
     public void handleTransactionEvent(
-            @Payload TransactionEventDTO event,
+            @Payload TransactionEvent event,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset,

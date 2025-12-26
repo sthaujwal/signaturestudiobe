@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.service;
 
-import com.wellsfargo.signaturestudio.dto.DelegationDTO;
+import com.wellsfargo.signaturestudio.domain.Delegation;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
 import com.wellsfargo.signaturestudio.model.Delegation;
@@ -29,7 +29,7 @@ public class DelegationService {
     }
     
     @Transactional
-    public DelegationDTO createDelegation(DelegationDTO dto, String createdBy) {
+    public Delegation createDelegation(Delegation dto, String createdBy) {
         logger.info("Creating delegation from {} to {}", dto.getDelegatorUserId(), dto.getDelegateUserId());
         
         ValidationHelper.validateDateRange(dto.getStartDate(), dto.getEndDate());
@@ -42,7 +42,7 @@ public class DelegationService {
         return toDTO(saved);
     }
     
-    private void validateNoOverlappingDelegations(DelegationDTO dto) {
+    private void validateNoOverlappingDelegations(Delegation dto) {
         List<Delegation> existingDelegations = delegationRepository.findActiveDelegationsByDelegator(
             dto.getDelegatorUserId(), Instant.now());
         
@@ -60,7 +60,7 @@ public class DelegationService {
         }
     }
     
-    private boolean hasDateOverlap(DelegationDTO newDelegation, Delegation existing) {
+    private boolean hasDateOverlap(Delegation newDelegation, Delegation existing) {
         Instant newStart = newDelegation.getStartDate();
         Instant newEnd = newDelegation.getEndDate();
         Instant existingStart = existing.getStartDate();
@@ -75,7 +75,7 @@ public class DelegationService {
                 (newEnd == null || newEnd.isAfter(existingStart)));
     }
     
-    private Delegation buildDelegationEntity(DelegationDTO dto, String createdBy) {
+    private Delegation buildDelegationEntity(Delegation dto, String createdBy) {
         Delegation delegation = new Delegation();
         delegation.setId(UUID.randomUUID().toString());
         delegation.setDelegatorUserId(dto.getDelegatorUserId());
@@ -92,21 +92,21 @@ public class DelegationService {
         return delegation;
     }
     
-    public List<DelegationDTO> getDelegationsByDelegator(String delegatorUserId) {
+    public List<Delegation> getDelegationsByDelegator(String delegatorUserId) {
         List<Delegation> delegations = delegationRepository.findByDelegatorUserId(delegatorUserId);
         return delegations.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
     
-    public List<DelegationDTO> getDelegationsByDelegate(String delegateUserId) {
+    public List<Delegation> getDelegationsByDelegate(String delegateUserId) {
         List<Delegation> delegations = delegationRepository.findByDelegateUserId(delegateUserId);
         return delegations.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
     
-    public List<DelegationDTO> getActiveDelegationsByDelegator(String delegatorUserId, String accountId) {
+    public List<Delegation> getActiveDelegationsByDelegator(String delegatorUserId, String accountId) {
         List<Delegation> delegations;
         if (accountId != null) {
             delegations = delegationRepository.findActiveDelegationsByDelegatorAndAccount(
@@ -120,7 +120,7 @@ public class DelegationService {
                 .collect(Collectors.toList());
     }
     
-    public List<DelegationDTO> getActiveDelegationsByDelegate(String delegateUserId) {
+    public List<Delegation> getActiveDelegationsByDelegate(String delegateUserId) {
         List<Delegation> delegations = delegationRepository.findActiveDelegationsByDelegate(
                 delegateUserId, Instant.now());
         return delegations.stream()
@@ -129,7 +129,7 @@ public class DelegationService {
     }
     
     @Transactional
-    public DelegationDTO updateDelegation(String id, DelegationDTO dto) {
+    public Delegation updateDelegation(String id, Delegation dto) {
         Delegation delegation = delegationRepository.findById(id)
                 .orElseThrow(() -> new ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "Delegation not found: " + id));
         
@@ -218,8 +218,8 @@ public class DelegationService {
         return userId;
     }
     
-    private DelegationDTO toDTO(Delegation delegation) {
-        DelegationDTO dto = new DelegationDTO();
+    private Delegation toDTO(Delegation delegation) {
+        Delegation dto = new Delegation();
         dto.setId(delegation.getId());
         dto.setDelegatorUserId(delegation.getDelegatorUserId());
         dto.setDelegateUserId(delegation.getDelegateUserId());

@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.controller;
 
-import com.wellsfargo.signaturestudio.dto.BrandingDTO;
+import com.wellsfargo.signaturestudio.domain.Branding;
 import com.wellsfargo.signaturestudio.service.BrandingService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -17,21 +17,21 @@ public class BrandingController {
     }
     
     @GetMapping("/account/{accountId}")
-    public ResponseEntity<BrandingDTO> getBrandingByAccountId(@PathVariable String accountId) {
-        BrandingDTO branding = brandingService.getBrandingByAccountId(accountId);
+    public ResponseEntity<Branding> getBrandingByAccountId(@PathVariable String accountId) {
+        Branding branding = brandingService.getBrandingByAccountId(accountId);
         return ResponseEntity.ok(branding);
     }
     
     @GetMapping("/account-code/{code}")
-    public ResponseEntity<BrandingDTO> getBrandingByAccountCode(@PathVariable String code) {
-        BrandingDTO branding = brandingService.getBrandingByAccountCode(code);
+    public ResponseEntity<Branding> getBrandingByAccountCode(@PathVariable String code) {
+        Branding branding = brandingService.getBrandingByAccountCode(code);
         return ResponseEntity.ok(branding);
     }
     
     @PutMapping("/account/{accountId}")
     public ResponseEntity<Void> saveBranding(
             @PathVariable String accountId,
-            @Valid @RequestBody BrandingDTO branding) {
+            @Valid @RequestBody Branding branding) {
         brandingService.saveBranding(accountId, branding);
         return ResponseEntity.ok().build();
     }

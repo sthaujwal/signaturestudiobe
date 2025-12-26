@@ -3,8 +3,8 @@ package com.wellsfargo.signaturestudio.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wellsfargo.signaturestudio.client.ESignatureServiceClient;
-import com.wellsfargo.signaturestudio.dto.DocumentDTO;
-import com.wellsfargo.signaturestudio.dto.FormFieldDTO;
+import com.wellsfargo.signaturestudio.domain.Document;
+import com.wellsfargo.signaturestudio.domain.FormField;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
 import com.wellsfargo.signaturestudio.model.Document;
@@ -65,7 +65,7 @@ public class DocumentService {
         }
     }
     
-    public List<DocumentDTO> getDocuments(String transactionId) {
+    public List<Document> getDocuments(String transactionId) {
         List<Document> documents = documentRepository.findByTransactionId(transactionId);
         return documents.stream()
                 .map(this::toDTO)
@@ -73,7 +73,7 @@ public class DocumentService {
     }
     
     @Transactional
-    public DocumentDTO uploadDocument(String transactionId, MultipartFile file, String uploadedBy, String formFieldsJson) {
+    public Document uploadDocument(String transactionId, MultipartFile file, String uploadedBy, String formFieldsJson) {
         Transaction transaction = findTransaction(transactionId);
         ValidationHelper.requireNonNull(file, "File");
         
@@ -86,8 +86,8 @@ public class DocumentService {
             Path filePath = saveFileToStorage(file, documentId);
             
             try {
-                DocumentDTO documentDTO = buildDocumentDTO(file, transactionId, documentId, uploadedBy, formFieldsJson);
-                DocumentDTO eSignatureResponse = addDocumentToESignature(transactionId, documentDTO, documentId);
+                Document documentDTO = buildDocument(file, transactionId, documentId, uploadedBy, formFieldsJson);
+                Document eSignatureResponse = addDocumentToESignature(transactionId, documentDTO, documentId);
                 Document document = saveDocumentMetadata(transaction, file, documentId, eSignatureResponse);
                 logger.info("Document metadata saved to DB: {} for transaction: {}", document.getId(), transactionId);
                 return toDTO(document);
@@ -116,7 +116,7 @@ public class DocumentService {
         return filePath;
     }
     
-    private DocumentDTO buildDocumentDTO(
+    private Document buildDocument(
             MultipartFile file,
             String transactionId,
             String documentId,
@@ -126,7 +126,7 @@ public class DocumentService {
         String fileExtension = getFileExtension(originalFileName);
         String fileName = documentId + "." + fileExtension;
         
-        DocumentDTO documentDTO = new DocumentDTO();
+        Document documentDTO = new Document();
         documentDTO.setId(documentId);
         documentDTO.setTransactionId(transactionId);
         documentDTO.setName(originalFileName);
@@ -145,15 +145,15 @@ public class DocumentService {
         return documentDTO;
     }
     
-    private void parseAndSetFormFields(DocumentDTO documentDTO, String formFieldsJson) {
+    private void parseAndSetFormFields(Document documentDTO, String formFieldsJson) {
         if (formFieldsJson == null || formFieldsJson.trim().isEmpty()) {
             return;
         }
         
         try {
-            List<FormFieldDTO> formFields = objectMapper.readValue(
+            List<FormField> formFields = objectMapper.readValue(
                 formFieldsJson, 
-                new TypeReference<List<FormFieldDTO>>() {}
+                new TypeReference<List<FormField>>() {}
             );
             documentDTO.setFormFields(formFields);
             logger.info("Parsed {} form fields from JSON for document upload", formFields.size());
@@ -162,7 +162,7 @@ public class DocumentService {
         }
     }
     
-    private DocumentDTO addDocumentToESignature(String transactionId, DocumentDTO documentDTO, String documentId) {
+    private Document addDocumentToESignature(String transactionId, Document documentDTO, String documentId) {
         return ESignatureIntegrationHelper.executeWithErrorHandling(
             "add document in eSignature service",
             () -> eSignatureServiceClient.addDocumentSync(transactionId, documentDTO),
@@ -182,7 +182,7 @@ public class DocumentService {
             Transaction transaction,
             MultipartFile file,
             String documentId,
-            DocumentDTO eSignatureResponse) {
+            Document eSignatureResponse) {
         Document document = new Document();
         document.setId(documentId);
         document.setTransaction(transaction);
@@ -237,7 +237,7 @@ public class DocumentService {
      * Get full document details from ESignatureService
      * Fetches form fields and ICMP objects
      */
-    public DocumentDTO getDocumentDetails(String transactionId, String documentId) {
+    public Document getDocumentDetails(String transactionId, String documentId) {
         Document document = documentRepository.findById(documentId)
             .orElseThrow(() -> new ServiceException(ErrorCode.RESOURCE_NOT_FOUND, 
                 "Document not found: " + documentId));
@@ -261,7 +261,7 @@ public class DocumentService {
         );
     }
     
-    private DocumentDTO fetchDocumentDetailsFromESignature(
+    private Document fetchDocumentDetailsFromESignature(
             Transaction transaction,
             Document document,
             String transactionId) {
@@ -269,7 +269,7 @@ public class DocumentService {
             ? document.getESignatureDocumentId() 
             : document.getId();
         
-        DocumentDTO fullDetails = eSignatureServiceClient.getDocumentDetails(
+        Document fullDetails = eSignatureServiceClient.getDocumentDetails(
             transaction.getESignatureTransactionId(), 
             eSignatureDocumentId);
         
@@ -286,7 +286,7 @@ public class DocumentService {
     }
     
     @Transactional
-    public DocumentDTO updateDocument(String transactionId, String documentId, DocumentDTO dto) {
+    public Document updateDocument(String transactionId, String documentId, Document dto) {
         Document document = documentRepository.findById(documentId)
             .orElseThrow(() -> new ServiceException(ErrorCode.RESOURCE_NOT_FOUND, 
                 "Document not found: " + documentId));
@@ -297,7 +297,7 @@ public class DocumentService {
             transactionId,
             "Document");
         
-        prepareDocumentDTOForUpdate(dto, document, transactionId);
+        prepareDocumentForUpdate(dto, document, transactionId);
         updateDocumentInESignature(transactionId, dto, documentId);
         updateDocumentMetadata(document, dto);
         
@@ -306,7 +306,7 @@ public class DocumentService {
         return toDTO(saved);
     }
     
-    private void prepareDocumentDTOForUpdate(DocumentDTO dto, Document document, String transactionId) {
+    private void prepareDocumentForUpdate(Document dto, Document document, String transactionId) {
         dto.setId(document.getId());
         dto.setTransactionId(transactionId);
         if (dto.getName() == null) {
@@ -317,7 +317,7 @@ public class DocumentService {
         }
     }
     
-    private void updateDocumentInESignature(String transactionId, DocumentDTO dto, String documentId) {
+    private void updateDocumentInESignature(String transactionId, Document dto, String documentId) {
         ESignatureIntegrationHelper.executeVoidWithErrorHandling(
             "change document in eSignature service",
             () -> eSignatureServiceClient.changeDocuments(transactionId, dto),
@@ -325,13 +325,13 @@ public class DocumentService {
         );
     }
     
-    private void updateDocumentMetadata(Document document, DocumentDTO dto) {
+    private void updateDocumentMetadata(Document document, Document dto) {
         UpdateHelper.setIfNotNull(dto.getName(), document::setName);
         UpdateHelper.setIfNotNull(dto.getTitle(), document::setTitle);
     }
     
-    private DocumentDTO toDTO(Document document) {
-        DocumentDTO dto = new DocumentDTO();
+    private Document toDTO(Document document) {
+        Document dto = new Document();
         dto.setId(document.getId());
         dto.setTransactionId(document.getTransaction().getId());
         dto.setName(document.getName());
@@ -351,7 +351,7 @@ public class DocumentService {
     /**
      * Get form fields for a document from ESignatureService
      */
-    public List<FormFieldDTO> getFormFields(String transactionId, String documentId) {
+    public List<FormField> getFormFields(String transactionId, String documentId) {
         Document document = documentRepository.findById(documentId)
             .orElseThrow(() -> new ServiceException(ErrorCode.RESOURCE_NOT_FOUND, 
                 "Document not found: " + documentId));
@@ -375,7 +375,7 @@ public class DocumentService {
         return ESignatureIntegrationHelper.executeWithErrorHandling(
             "get form fields from ESignatureService",
             () -> {
-                List<FormFieldDTO> formFields = eSignatureServiceClient.getFormFields(
+                List<FormField> formFields = eSignatureServiceClient.getFormFields(
                     transaction.getESignatureTransactionId(), 
                     eSignatureDocumentId);
                 logger.info("Fetched {} form fields from ESignatureService for document: {}", 
@@ -391,7 +391,7 @@ public class DocumentService {
      * Sends form fields to ESignatureService via changeDocuments
      */
     @Transactional
-    public DocumentDTO updateFormFields(String transactionId, String documentId, List<FormFieldDTO> formFields) {
+    public Document updateFormFields(String transactionId, String documentId, List<FormField> formFields) {
         Document document = documentRepository.findById(documentId)
             .orElseThrow(() -> new ServiceException(ErrorCode.RESOURCE_NOT_FOUND, 
                 "Document not found: " + documentId));
@@ -402,7 +402,7 @@ public class DocumentService {
             transactionId,
             "Document");
         
-        DocumentDTO documentDTO = buildDocumentDTOForFormFields(document, transactionId, formFields);
+        Document documentDTO = buildDocumentForFormFields(document, transactionId, formFields);
         
         ESignatureIntegrationHelper.executeVoidWithErrorHandling(
             "update form fields in eSignature service",
@@ -413,11 +413,11 @@ public class DocumentService {
         return toDTO(document);
     }
     
-    private DocumentDTO buildDocumentDTOForFormFields(
+    private Document buildDocumentForFormFields(
             Document document,
             String transactionId,
-            List<FormFieldDTO> formFields) {
-        DocumentDTO documentDTO = new DocumentDTO();
+            List<FormField> formFields) {
+        Document documentDTO = new Document();
         documentDTO.setId(document.getId());
         documentDTO.setTransactionId(transactionId);
         documentDTO.setName(document.getName());

@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.client;
 
-import com.wellsfargo.signaturestudio.dto.BrandingDTO;
+import com.wellsfargo.signaturestudio.domain.Branding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,12 +27,12 @@ public class BrandingServiceClient {
         this.baseUrl = baseUrl;
     }
     
-    public BrandingDTO getBrandingByAccountId(String accountId) {
+    public Branding getBrandingByAccountId(String accountId) {
         try {
             String url = baseUrl + "/api/v1/branding/account/" + accountId;
             logger.info("Calling Branding service to get branding by account ID: {}", url);
             
-            ResponseEntity<BrandingDTO> response = restTemplate.getForEntity(url, BrandingDTO.class);
+            ResponseEntity<Branding> response = restTemplate.getForEntity(url, Branding.class);
             return response.getBody();
         } catch (RestClientException e) {
             logger.error("Error calling Branding service to get branding by account ID: {}", accountId, e);
@@ -40,12 +40,12 @@ public class BrandingServiceClient {
         }
     }
     
-    public BrandingDTO getBrandingByAccountCode(String accountCode) {
+    public Branding getBrandingByAccountCode(String accountCode) {
         try {
             String url = baseUrl + "/api/v1/branding/account-code/" + accountCode;
             logger.info("Calling Branding service to get branding by account code: {}", url);
             
-            ResponseEntity<BrandingDTO> response = restTemplate.getForEntity(url, BrandingDTO.class);
+            ResponseEntity<Branding> response = restTemplate.getForEntity(url, Branding.class);
             return response.getBody();
         } catch (RestClientException e) {
             logger.error("Error calling Branding service to get branding by account code: {}", accountCode, e);
@@ -53,14 +53,14 @@ public class BrandingServiceClient {
         }
     }
     
-    public void saveBranding(String accountId, BrandingDTO branding) {
+    public void saveBranding(String accountId, Branding branding) {
         try {
             String url = baseUrl + "/api/v1/branding/account/" + accountId;
             logger.info("Calling Branding service to save branding: {}", url);
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
-            HttpEntity<BrandingDTO> request = new HttpEntity<>(branding, headers);
+            HttpEntity<Branding> request = new HttpEntity<>(branding, headers);
             
             restTemplate.exchange(url, HttpMethod.PUT, request, Void.class);
             logger.info("Branding saved successfully for account: {}", accountId);

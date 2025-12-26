@@ -1,8 +1,8 @@
 package com.wellsfargo.signaturestudio.controller;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
-import com.wellsfargo.signaturestudio.dto.PaginatedResponseDTO;
-import com.wellsfargo.signaturestudio.dto.TransactionDTO;
+import com.wellsfargo.signaturestudio.domain.PaginatedResponse;
+import com.wellsfargo.signaturestudio.domain.Transaction;
 import com.wellsfargo.signaturestudio.service.TransactionService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
@@ -41,7 +41,7 @@ public class SearchController {
      * @return Paginated search results
      */
     @GetMapping
-    public ResponseEntity<PaginatedResponseDTO<TransactionDTO>> search(
+    public ResponseEntity<PaginatedResponse<Transaction>> search(
             @RequestParam("q") String query,
             @RequestParam(required = false) String accountId,
             @RequestParam(defaultValue = "0") int page,
@@ -53,7 +53,7 @@ public class SearchController {
         }
         
         // Use the existing transaction search with delegation support
-        PaginatedResponseDTO<TransactionDTO> results = transactionService.getTransactionsWithDelegations(
+        PaginatedResponse<Transaction> results = transactionService.getTransactionsWithDelegations(
             accountId, userId, query, page, size, "createdAt", "desc");
         
         return ResponseEntity.ok(results);

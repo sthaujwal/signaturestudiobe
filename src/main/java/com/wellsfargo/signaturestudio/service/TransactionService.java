@@ -2,11 +2,11 @@ package com.wellsfargo.signaturestudio.service;
 
 import com.wellsfargo.signaturestudio.client.AlertServiceClient;
 import com.wellsfargo.signaturestudio.client.ESignatureServiceClient;
-import com.wellsfargo.signaturestudio.dto.AlertRequestDTO;
-import com.wellsfargo.signaturestudio.dto.DocumentDTO;
-import com.wellsfargo.signaturestudio.dto.PaginatedResponseDTO;
-import com.wellsfargo.signaturestudio.dto.UserDTO;
-import com.wellsfargo.signaturestudio.dto.TransactionDTO;
+import com.wellsfargo.signaturestudio.domain.AlertRequest;
+import com.wellsfargo.signaturestudio.domain.Document;
+import com.wellsfargo.signaturestudio.domain.PaginatedResponse;
+import com.wellsfargo.signaturestudio.domain.User;
+import com.wellsfargo.signaturestudio.domain.Transaction;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
 import com.wellsfargo.signaturestudio.model.Document;
@@ -58,10 +58,10 @@ public class TransactionService {
     }
     
     @Transactional
-    public TransactionDTO createTransaction(TransactionDTO dto, String createdBy, String creatorEmail) {
+    public Transaction createTransaction(Transaction dto, String createdBy, String creatorEmail) {
         logger.info("Creating transaction: {} by user: {} ({})", dto.getTitle(), createdBy, creatorEmail);
         
-        TransactionDTO eSignatureResponse = createESignatureTransaction(dto);
+        Transaction eSignatureResponse = createESignatureTransaction(dto);
         Transaction transaction = saveTransactionMetadata(dto, createdBy, creatorEmail, eSignatureResponse);
         
         processUsers(transaction, dto.getUsers());
@@ -71,11 +71,11 @@ public class TransactionService {
         return toDTO(transaction);
     }
     
-    private TransactionDTO createESignatureTransaction(TransactionDTO dto) {
+    private Transaction createESignatureTransaction(Transaction dto) {
         return ESignatureIntegrationHelper.executeWithErrorHandling(
             "create transaction in eSignature service",
             () -> {
-                TransactionDTO response = eSignatureServiceClient.createTransaction(dto);
+                Transaction response = eSignatureServiceClient.createTransaction(dto);
                 if (response == null) {
                     throw new ServiceException(ErrorCode.ESIGNATURE_SERVICE_ERROR, 
                         "eSignature service returned null response");
@@ -87,10 +87,10 @@ public class TransactionService {
     }
     
     private Transaction saveTransactionMetadata(
-            TransactionDTO dto, 
+            Transaction dto, 
             String createdBy, 
             String creatorEmail, 
-            TransactionDTO eSignatureResponse) {
+            Transaction eSignatureResponse) {
         Transaction transaction = buildTransactionEntity(dto, createdBy, creatorEmail, eSignatureResponse);
         Transaction saved = transactionRepository.save(transaction);
         logger.info("Transaction metadata saved to DB with ID: {}", saved.getId());
@@ -99,10 +99,10 @@ public class TransactionService {
     
     @NonNull
     private Transaction buildTransactionEntity(
-            TransactionDTO dto, 
+            Transaction dto, 
             String createdBy, 
             String creatorEmail, 
-            TransactionDTO eSignatureResponse) {
+            Transaction eSignatureResponse) {
         Transaction transaction = new Transaction();
         transaction.setId(dto.getId() != null ? dto.getId() : UUID.randomUUID().toString());
         transaction.setTitle(dto.getTitle());
@@ -122,12 +122,12 @@ public class TransactionService {
         return transaction;
     }
     
-    private void processUsers(Transaction transaction, List<UserDTO> users) {
+    private void processUsers(Transaction transaction, List<User> users) {
         if (users == null || users.isEmpty()) {
             return;
         }
         
-        // Note: When creating transactions, users come as UserDTO from TransactionDTO.
+        // Note: When creating transactions, users come as User from Transaction.
         // For individual user addition, use AddUserRequest which has stricter validation.
         // Here we validate basic requirements but not externalIdType/authType since
         // those are specific to AddUserRequest.
@@ -141,8 +141,8 @@ public class TransactionService {
         saveUsersToDatabase(transaction, users);
     }
     
-    private void saveUsersToDatabase(Transaction transaction, List<UserDTO> userDTOs) {
-        for (UserDTO userDTO : userDTOs) {
+    private void saveUsersToDatabase(Transaction transaction, List<User> userDTOs) {
+        for (User userDTO : userDTOs) {
             User user = buildUserEntity(userDTO, transaction);
             userRepository.save(user);
         }
@@ -150,7 +150,7 @@ public class TransactionService {
     }
     
     @NonNull
-    private User buildUserEntity(UserDTO userDTO, Transaction transaction) {
+    private User buildUserEntity(User userDTO, Transaction transaction) {
         User user = new User();
         user.setId(UUID.randomUUID().toString());
         user.setTransaction(transaction);
@@ -169,19 +169,19 @@ public class TransactionService {
         return user;
     }
     
-    private void processDocuments(Transaction transaction, List<DocumentDTO> documents) {
+    private void processDocuments(Transaction transaction, List<Document> documents) {
         if (documents == null || documents.isEmpty()) {
             return;
         }
         
-        for (DocumentDTO documentDTO : documents) {
+        for (Document documentDTO : documents) {
             processDocument(transaction, documentDTO);
         }
     }
     
-    private void processDocument(Transaction transaction, DocumentDTO documentDTO) {
+    private void processDocument(Transaction transaction, Document documentDTO) {
         try {
-            DocumentDTO eSignatureDoc = eSignatureServiceClient.addDocumentSync(
+            Document eSignatureDoc = eSignatureServiceClient.addDocumentSync(
                 transaction.getId(), documentDTO);
             logger.info("Document added successfully in eSignature service: {}", documentDTO.getId());
             
@@ -197,9 +197,9 @@ public class TransactionService {
     
     @NonNull
     private Document buildDocumentEntity(
-            DocumentDTO documentDTO, 
+            Document documentDTO, 
             Transaction transaction, 
-            DocumentDTO eSignatureDoc) {
+            Document eSignatureDoc) {
         Document document = new Document();
         document.setId(documentDTO.getId() != null ? 
             documentDTO.getId() : UUID.randomUUID().toString());
@@ -212,13 +212,13 @@ public class TransactionService {
         return document;
     }
     
-    private void sendInitialAlerts(Transaction transaction, TransactionDTO dto) {
+    private void sendInitialAlerts(Transaction transaction, Transaction dto) {
         if (dto.getUsers() == null || dto.getUsers().isEmpty()) {
             return;
         }
         
         try {
-            for (UserDTO user : dto.getUsers()) {
+            for (User user : dto.getUsers()) {
                 sendAlertToUser(transaction, dto, user);
             }
         } catch (Exception e) {
@@ -228,8 +228,8 @@ public class TransactionService {
         }
     }
     
-    private void sendAlertToUser(Transaction transaction, TransactionDTO dto, UserDTO user) {
-        AlertRequestDTO alertRequest = new AlertRequestDTO();
+    private void sendAlertToUser(Transaction transaction, Transaction dto, User user) {
+        AlertRequest alertRequest = new AlertRequest();
         alertRequest.setTemplateId(dto.getEmailTemplate());
         alertRequest.setRecipientEmail(user.getEmail());
         alertRequest.setRecipientName(user.getFullName() != null ? 
@@ -238,7 +238,7 @@ public class TransactionService {
         alertServiceClient.sendAlert(alertRequest);
     }
     
-    public List<TransactionDTO> getTransactions(String accountId, String createdBy) {
+    public List<Transaction> getTransactions(String accountId, String createdBy) {
         List<Transaction> transactions;
         if (accountId != null && createdBy != null) {
             transactions = transactionRepository.findByCreatedByAndAccountId(createdBy, accountId);
@@ -268,7 +268,7 @@ public class TransactionService {
      * @param sortBy Field to sort by
      * @param sortDirection Sort direction (asc/desc)
      */
-    public PaginatedResponseDTO<TransactionDTO> getTransactionsWithDelegations(
+    public PaginatedResponse<Transaction> getTransactionsWithDelegations(
             String accountId, 
             String userId, 
             String searchText,
@@ -289,10 +289,10 @@ public class TransactionService {
         List<String> userIdsToQuery = new ArrayList<>();
         userIdsToQuery.add(userId);
         
-        List<com.wellsfargo.signaturestudio.dto.DelegationDTO> activeDelegations = 
+        List<com.wellsfargo.signaturestudio.domain.Delegation> activeDelegations = 
             delegationService.getActiveDelegationsByDelegate(userId);
         
-        for (com.wellsfargo.signaturestudio.dto.DelegationDTO delegation : activeDelegations) {
+        for (com.wellsfargo.signaturestudio.domain.Delegation delegation : activeDelegations) {
             if (isDelegationApplicable(delegation, accountId)) {
                 userIdsToQuery.add(delegation.getDelegatorUserId());
             }
@@ -302,7 +302,7 @@ public class TransactionService {
     }
     
     private boolean isDelegationApplicable(
-            com.wellsfargo.signaturestudio.dto.DelegationDTO delegation, 
+            com.wellsfargo.signaturestudio.domain.Delegation delegation, 
             String accountId) {
         return accountId == null || 
                delegation.getAccountId() == null || 
@@ -329,12 +329,12 @@ public class TransactionService {
             : transactionRepository.findByCreatedByIn(userIdsToQuery, pageable);
     }
     
-    private PaginatedResponseDTO<TransactionDTO> buildPaginatedResponse(Page<Transaction> transactionPage) {
-        List<TransactionDTO> transactionDTOs = transactionPage.getContent().stream()
+    private PaginatedResponse<Transaction> buildPaginatedResponse(Page<Transaction> transactionPage) {
+        List<Transaction> transactionDTOs = transactionPage.getContent().stream()
             .map(this::toDTO)
             .collect(Collectors.toList());
         
-        return new PaginatedResponseDTO<>(
+        return new PaginatedResponse<>(
             transactionDTOs,
             transactionPage.getNumber(),
             transactionPage.getSize(),
@@ -345,7 +345,7 @@ public class TransactionService {
     /**
      * Get transactions with pagination and search (without delegation support)
      */
-    public PaginatedResponseDTO<TransactionDTO> getTransactionsPaginated(
+    public PaginatedResponse<Transaction> getTransactionsPaginated(
             String accountId, 
             String createdBy, 
             String searchText,
@@ -408,7 +408,7 @@ public class TransactionService {
         return transactionRepository.findAll(pageable);
     }
     
-    public TransactionDTO getTransaction(String id) {
+    public Transaction getTransaction(String id) {
         Transaction transaction = transactionRepository.findById(id)
                 .orElseThrow(() -> new ServiceException(ErrorCode.TRANSACTION_NOT_FOUND, "Transaction ID: " + id));
         return toDTO(transaction);
@@ -418,7 +418,7 @@ public class TransactionService {
      * Get full transaction details from ESignatureService
      * Fetches documents, form fields, attributes, and ICMP objects
      */
-    public TransactionDTO getTransactionDetails(String id) {
+    public Transaction getTransactionDetails(String id) {
         Transaction transaction = transactionRepository.findById(id)
                 .orElseThrow(() -> new ServiceException(ErrorCode.TRANSACTION_NOT_FOUND, "Transaction ID: " + id));
         
@@ -429,7 +429,7 @@ public class TransactionService {
         
         try {
             // Fetch full details from ESignatureService
-            TransactionDTO fullDetails = eSignatureServiceClient.getTransactionDetails(transaction.getESignatureTransactionId());
+            Transaction fullDetails = eSignatureServiceClient.getTransactionDetails(transaction.getESignatureTransactionId());
             // Merge with local metadata
             fullDetails.setId(transaction.getId());
             fullDetails.setCreatedBy(transaction.getCreatedBy());
@@ -445,7 +445,7 @@ public class TransactionService {
     }
     
     @Transactional
-    public TransactionDTO updateTransaction(String id, TransactionDTO dto) {
+    public Transaction updateTransaction(String id, Transaction dto) {
         Transaction transaction = transactionRepository.findById(id)
                 .orElseThrow(() -> new ServiceException(ErrorCode.TRANSACTION_NOT_FOUND, "Transaction ID: " + id));
         
@@ -522,8 +522,8 @@ public class TransactionService {
         return status;
     }
     
-    private TransactionDTO toDTO(Transaction transaction) {
-        TransactionDTO dto = new TransactionDTO();
+    private Transaction toDTO(Transaction transaction) {
+        Transaction dto = new Transaction();
         dto.setId(transaction.getId());
         dto.setTitle(transaction.getTitle());
         dto.setDescription(transaction.getDescription());
@@ -562,8 +562,8 @@ public class TransactionService {
         return dto;
     }
     
-    private UserDTO userToDTO(User user) {
-        UserDTO dto = new UserDTO();
+    private User userToDTO(User user) {
+        User dto = new User();
         dto.setId(user.getId());
         dto.setFirstName(user.getFirstName());
         dto.setLastName(user.getLastName());
@@ -580,8 +580,8 @@ public class TransactionService {
         return dto;
     }
     
-    private DocumentDTO documentToDTO(Document document) {
-        DocumentDTO dto = new DocumentDTO();
+    private Document documentToDTO(Document document) {
+        Document dto = new Document();
         dto.setId(document.getId());
         dto.setTransactionId(document.getTransaction().getId());
         dto.setName(document.getName());

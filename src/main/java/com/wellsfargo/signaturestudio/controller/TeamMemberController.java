@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.controller;
 
-import com.wellsfargo.signaturestudio.dto.TeamMemberDTO;
-import com.wellsfargo.signaturestudio.dto.TeamMemberSearchRequestDTO;
+import com.wellsfargo.signaturestudio.domain.TeamMember;
+import com.wellsfargo.signaturestudio.domain.TeamMemberSearchRequest;
 import com.wellsfargo.signaturestudio.service.LdapTeamMemberService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -30,9 +30,9 @@ public class TeamMemberController {
      * @return List of team members matching the search criteria
      */
     @PostMapping("/search")
-    public ResponseEntity<List<TeamMemberDTO>> searchTeamMembers(
-            @Valid @RequestBody TeamMemberSearchRequestDTO searchRequest) {
-        List<TeamMemberDTO> teamMembers = ldapTeamMemberService.searchTeamMembers(searchRequest);
+    public ResponseEntity<List<TeamMember>> searchTeamMembers(
+            @Valid @RequestBody TeamMemberSearchRequest searchRequest) {
+        List<TeamMember> teamMembers = ldapTeamMemberService.searchTeamMembers(searchRequest);
         return ResponseEntity.ok(teamMembers);
     }
     
@@ -44,7 +44,7 @@ public class TeamMemberController {
      * @return List of team members matching the search criteria
      */
     @GetMapping("/search")
-    public ResponseEntity<List<TeamMemberDTO>> searchTeamMembersGet(
+    public ResponseEntity<List<TeamMember>> searchTeamMembersGet(
             @RequestParam String query,
             @RequestParam(required = false, defaultValue = "20") Integer maxResults) {
         
@@ -56,8 +56,8 @@ public class TeamMemberController {
             maxResults = 20;
         }
         
-        TeamMemberSearchRequestDTO searchRequest = new TeamMemberSearchRequestDTO(query, maxResults);
-        List<TeamMemberDTO> teamMembers = ldapTeamMemberService.searchTeamMembers(searchRequest);
+        TeamMemberSearchRequest searchRequest = new TeamMemberSearchRequest(query, maxResults);
+        List<TeamMember> teamMembers = ldapTeamMemberService.searchTeamMembers(searchRequest);
         return ResponseEntity.ok(teamMembers);
     }
 }

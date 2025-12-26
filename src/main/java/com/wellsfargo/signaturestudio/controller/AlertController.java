@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.controller;
 
-import com.wellsfargo.signaturestudio.dto.AlertRequestDTO;
-import com.wellsfargo.signaturestudio.dto.EmailTemplateDTO;
+import com.wellsfargo.signaturestudio.domain.AlertRequest;
+import com.wellsfargo.signaturestudio.domain.EmailTemplate;
 import com.wellsfargo.signaturestudio.service.AlertService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -20,20 +20,20 @@ public class AlertController {
     }
     
     @PostMapping("/send")
-    public ResponseEntity<Void> sendAlert(@Valid @RequestBody AlertRequestDTO alertRequest) {
+    public ResponseEntity<Void> sendAlert(@Valid @RequestBody AlertRequest alertRequest) {
         alertService.sendAlert(alertRequest);
         return ResponseEntity.ok().build();
     }
     
     @GetMapping("/templates")
-    public ResponseEntity<List<EmailTemplateDTO>> getTemplates() {
-        List<EmailTemplateDTO> templates = alertService.getTemplates();
+    public ResponseEntity<List<EmailTemplate>> getTemplates() {
+        List<EmailTemplate> templates = alertService.getTemplates();
         return ResponseEntity.ok(templates);
     }
     
     @GetMapping("/templates/{id}")
-    public ResponseEntity<EmailTemplateDTO> getTemplate(@PathVariable String id) {
-        EmailTemplateDTO template = alertService.getTemplate(id);
+    public ResponseEntity<EmailTemplate> getTemplate(@PathVariable String id) {
+        EmailTemplate template = alertService.getTemplate(id);
         return ResponseEntity.ok(template);
     }
 }

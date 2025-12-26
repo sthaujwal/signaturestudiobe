@@ -1,10 +1,10 @@
 package com.wellsfargo.signaturestudio.client;
 
-import com.wellsfargo.signaturestudio.dto.DocumentDTO;
-import com.wellsfargo.signaturestudio.dto.FormFieldDTO;
-import com.wellsfargo.signaturestudio.dto.ICMPDTO;
-import com.wellsfargo.signaturestudio.dto.TransactionDTO;
-import com.wellsfargo.signaturestudio.dto.UserDTO;
+import com.wellsfargo.signaturestudio.domain.Document;
+import com.wellsfargo.signaturestudio.domain.FormField;
+import com.wellsfargo.signaturestudio.domain.ICMP;
+import com.wellsfargo.signaturestudio.domain.Transaction;
+import com.wellsfargo.signaturestudio.domain.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,17 +39,17 @@ public class ESignatureServiceClient {
      * Create transaction in eSignature service
      * POST /createTransaction/V1
      */
-    public TransactionDTO createTransaction(TransactionDTO transactionDTO) {
+    public Transaction createTransaction(Transaction transactionDTO) {
         try {
             String url = baseUrl + "/createTransaction/V1";
             logger.info("Calling eSignature service to create transaction: {}", url);
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
-            HttpEntity<TransactionDTO> request = new HttpEntity<>(transactionDTO, headers);
+            HttpEntity<Transaction> request = new HttpEntity<>(transactionDTO, headers);
             
-            ResponseEntity<TransactionDTO> response = restTemplate.exchange(
-                    url, HttpMethod.POST, request, TransactionDTO.class);
+            ResponseEntity<Transaction> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, Transaction.class);
             
             logger.info("Transaction created successfully in eSignature service with ID: {}", 
                     response.getBody() != null ? response.getBody().getId() : "unknown");
@@ -64,17 +64,17 @@ public class ESignatureServiceClient {
      * Update/Change transaction in eSignature service
      * POST /changeTransaction/V1
      */
-    public TransactionDTO changeTransaction(TransactionDTO transactionDTO) {
+    public Transaction changeTransaction(Transaction transactionDTO) {
         try {
             String url = baseUrl + "/changeTransaction/V1";
             logger.info("Calling eSignature service to change transaction: {}", url);
             
             HttpHeaders headers = new HttpHeaders();
             headers.set("Content-Type", "application/json");
-            HttpEntity<TransactionDTO> request = new HttpEntity<>(transactionDTO, headers);
+            HttpEntity<Transaction> request = new HttpEntity<>(transactionDTO, headers);
             
-            ResponseEntity<TransactionDTO> response = restTemplate.exchange(
-                    url, HttpMethod.POST, request, TransactionDTO.class);
+            ResponseEntity<Transaction> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, Transaction.class);
             
             logger.info("Transaction changed successfully in eSignature service: {}", transactionDTO.getId());
             return response.getBody();
@@ -110,7 +110,7 @@ public class ESignatureServiceClient {
      * Add users to transaction in eSignature service
      * POST /addUsers/V1
      */
-    public void addUsers(String transactionId, List<UserDTO> users) {
+    public void addUsers(String transactionId, List<User> users) {
         try {
             String url = baseUrl + "/addUsers/V1";
             logger.info("Calling eSignature service to add users: {}", url);
@@ -135,7 +135,7 @@ public class ESignatureServiceClient {
      * Update/Change users in eSignature service
      * POST /changeUsers/V1
      */
-    public void changeUsers(String transactionId, List<UserDTO> users) {
+    public void changeUsers(String transactionId, List<User> users) {
         try {
             String url = baseUrl + "/changeUsers/V1";
             logger.info("Calling eSignature service to change users: {}", url);
@@ -185,7 +185,7 @@ public class ESignatureServiceClient {
      * Add document to transaction in eSignature service
      * POST /addDocumentSync/V1
      */
-    public DocumentDTO addDocumentSync(String transactionId, DocumentDTO document) {
+    public Document addDocumentSync(String transactionId, Document document) {
         try {
             String url = baseUrl + "/addDocumentSync/V1";
             logger.info("Calling eSignature service to add document: {}", url);
@@ -198,8 +198,8 @@ public class ESignatureServiceClient {
             );
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
             
-            ResponseEntity<DocumentDTO> response = restTemplate.exchange(
-                    url, HttpMethod.POST, request, DocumentDTO.class);
+            ResponseEntity<Document> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, Document.class);
             
             logger.info("Document added successfully in eSignature service: {}", document.getId());
             return response.getBody();
@@ -213,7 +213,7 @@ public class ESignatureServiceClient {
      * Update/Change document in eSignature service
      * POST /changeDocuments/V1
      */
-    public DocumentDTO changeDocuments(String transactionId, DocumentDTO document) {
+    public Document changeDocuments(String transactionId, Document document) {
         try {
             String url = baseUrl + "/changeDocuments/V1";
             logger.info("Calling eSignature service to change document: {}", url);
@@ -226,8 +226,8 @@ public class ESignatureServiceClient {
             );
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
             
-            ResponseEntity<DocumentDTO> response = restTemplate.exchange(
-                    url, HttpMethod.POST, request, DocumentDTO.class);
+            ResponseEntity<Document> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, Document.class);
             
             logger.info("Document changed successfully in eSignature service: {}", document.getId());
             return response.getBody();
@@ -291,9 +291,9 @@ public class ESignatureServiceClient {
     /**
      * Get full transaction details from eSignature service
      * POST /getTransactionDetails/V1
-     * Returns full TransactionDTO with documents, form fields, attributes, ICMP
+     * Returns full Transaction with documents, form fields, attributes, ICMP
      */
-    public TransactionDTO getTransactionDetails(String eSignatureTransactionId) {
+    public Transaction getTransactionDetails(String eSignatureTransactionId) {
         try {
             String url = baseUrl + "/getTransactionDetails/V1";
             logger.info("Calling eSignature service to get transaction details: {}", url);
@@ -303,8 +303,8 @@ public class ESignatureServiceClient {
             Map<String, String> requestBody = Map.of("eSignatureTransactionId", eSignatureTransactionId);
             HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
             
-            ResponseEntity<TransactionDTO> response = restTemplate.exchange(
-                    url, HttpMethod.POST, request, TransactionDTO.class);
+            ResponseEntity<Transaction> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, Transaction.class);
             
             logger.info("Transaction details fetched successfully from eSignature service: {}", eSignatureTransactionId);
             return response.getBody();
@@ -317,9 +317,9 @@ public class ESignatureServiceClient {
     /**
      * Get full document details from eSignature service
      * POST /getDocumentDetails/V1
-     * Returns DocumentDTO with form fields and ICMP
+     * Returns Document with form fields and ICMP
      */
-    public DocumentDTO getDocumentDetails(String eSignatureTransactionId, String documentId) {
+    public Document getDocumentDetails(String eSignatureTransactionId, String documentId) {
         try {
             String url = baseUrl + "/getDocumentDetails/V1";
             logger.info("Calling eSignature service to get document details: {}", url);
@@ -332,8 +332,8 @@ public class ESignatureServiceClient {
             );
             HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
             
-            ResponseEntity<DocumentDTO> response = restTemplate.exchange(
-                    url, HttpMethod.POST, request, DocumentDTO.class);
+            ResponseEntity<Document> response = restTemplate.exchange(
+                    url, HttpMethod.POST, request, Document.class);
             
             logger.info("Document details fetched successfully from eSignature service: {}", documentId);
             return response.getBody();
@@ -346,9 +346,9 @@ public class ESignatureServiceClient {
     /**
      * Get form fields for a document from eSignature service
      * POST /getFormFields/V1
-     * Returns List<FormFieldDTO>
+     * Returns List<FormField>
      */
-    public List<FormFieldDTO> getFormFields(String eSignatureTransactionId, String documentId) {
+    public List<FormField> getFormFields(String eSignatureTransactionId, String documentId) {
         try {
             String url = baseUrl + "/getFormFields/V1";
             logger.info("Calling eSignature service to get form fields: {}", url);
@@ -361,9 +361,9 @@ public class ESignatureServiceClient {
             );
             HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
             
-            ResponseEntity<List<FormFieldDTO>> response = restTemplate.exchange(
+            ResponseEntity<List<FormField>> response = restTemplate.exchange(
                     url, HttpMethod.POST, request, 
-                    new ParameterizedTypeReference<List<FormFieldDTO>>() {});
+                    new ParameterizedTypeReference<List<FormField>>() {});
             
             logger.info("Form fields fetched successfully from eSignature service for document: {}", documentId);
             return response.getBody();
@@ -404,9 +404,9 @@ public class ESignatureServiceClient {
     /**
      * Get ICMP objects for a document from eSignature service
      * POST /getICMPObjects/V1
-     * Returns List<ICMPDTO>
+     * Returns List<ICMP>
      */
-    public List<ICMPDTO> getICMPObjects(String eSignatureTransactionId, String documentId) {
+    public List<ICMP> getICMPObjects(String eSignatureTransactionId, String documentId) {
         try {
             String url = baseUrl + "/getICMPObjects/V1";
             logger.info("Calling eSignature service to get ICMP objects: {}", url);
@@ -419,9 +419,9 @@ public class ESignatureServiceClient {
             );
             HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
             
-            ResponseEntity<List<ICMPDTO>> response = restTemplate.exchange(
+            ResponseEntity<List<ICMP>> response = restTemplate.exchange(
                     url, HttpMethod.POST, request, 
-                    new ParameterizedTypeReference<List<ICMPDTO>>() {});
+                    new ParameterizedTypeReference<List<ICMP>>() {});
             
             logger.info("ICMP objects fetched successfully from eSignature service for document: {}", documentId);
             return response.getBody();

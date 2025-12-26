@@ -1,8 +1,8 @@
 package com.wellsfargo.signaturestudio.controller;
 
-import com.wellsfargo.signaturestudio.dto.AccountDTO;
-import com.wellsfargo.signaturestudio.dto.SessionDTO;
-import com.wellsfargo.signaturestudio.dto.SwitchAccountRequestDTO;
+import com.wellsfargo.signaturestudio.domain.Account;
+import com.wellsfargo.signaturestudio.domain.Session;
+import com.wellsfargo.signaturestudio.domain.SwitchAccountRequest;
 import com.wellsfargo.signaturestudio.service.AccountService;
 import com.wellsfargo.signaturestudio.service.SessionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,13 +41,13 @@ public class AccountController {
      * @return List of accounts the user can access
      */
     @GetMapping
-    public ResponseEntity<List<AccountDTO>> getUserAccounts(HttpSession session) {
+    public ResponseEntity<List<Account>> getUserAccounts(HttpSession session) {
         String username = sessionService.getUsername(session);
         if (username == null) {
             return ResponseEntity.status(401).build();
         }
         
-        List<AccountDTO> accounts = accountService.getUserAccounts(username);
+        List<Account> accounts = accountService.getUserAccounts(username);
         return ResponseEntity.ok(accounts);
     }
     
@@ -58,7 +58,7 @@ public class AccountController {
      * @return Current account information
      */
     @GetMapping("/current")
-    public ResponseEntity<AccountDTO> getCurrentAccount(HttpSession session) {
+    public ResponseEntity<Account> getCurrentAccount(HttpSession session) {
         String username = sessionService.getUsername(session);
         if (username == null) {
             return ResponseEntity.status(401).build();
@@ -67,11 +67,11 @@ public class AccountController {
         String accountId = sessionService.getAccountId(session);
         if (accountId == null) {
             // Return default account if no account is set in session
-            AccountDTO defaultAccount = accountService.getDefaultAccount(username);
+            Account defaultAccount = accountService.getDefaultAccount(username);
             return ResponseEntity.ok(defaultAccount);
         }
         
-        AccountDTO account = accountService.getAccount(username, accountId);
+        Account account = accountService.getAccount(username, accountId);
         return ResponseEntity.ok(account);
     }
     
@@ -92,8 +92,8 @@ public class AccountController {
      * @return Updated session information with new account context
      */
     @PostMapping("/switch")
-    public ResponseEntity<SessionDTO> switchAccount(
-            @Valid @RequestBody SwitchAccountRequestDTO requestDTO,
+    public ResponseEntity<Session> switchAccount(
+            @Valid @RequestBody SwitchAccountRequest requestDTO,
             HttpServletRequest request) {
         
         HttpSession session = request.getSession(false);
@@ -117,7 +117,7 @@ public class AccountController {
         sessionService.switchAccount(session, newAccountId, username);
         
         // Get updated session info
-        SessionDTO sessionDTO = sessionService.getSessionInfo(session);
+        Session sessionDTO = sessionService.getSessionInfo(session);
         
         return ResponseEntity.ok(sessionDTO);
     }

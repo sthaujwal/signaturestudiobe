@@ -1,6 +1,6 @@
 package com.wellsfargo.signaturestudio.service;
 
-import com.wellsfargo.signaturestudio.dto.TransactionEventDTO;
+import com.wellsfargo.signaturestudio.domain.TransactionEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -119,7 +119,7 @@ public class SseService {
      * 
      * @param event The transaction event
      */
-    public void sendTransactionEvent(TransactionEventDTO event) {
+    public void sendTransactionEvent(TransactionEvent event) {
         logger.debug("Sending transaction event: {}", event);
         
         // Send to user-specific streams

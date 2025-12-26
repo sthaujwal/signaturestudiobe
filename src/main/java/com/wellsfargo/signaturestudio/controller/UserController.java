@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.controller;
 
-import com.wellsfargo.signaturestudio.dto.AddUserRequest;
-import com.wellsfargo.signaturestudio.dto.UserDTO;
+import com.wellsfargo.signaturestudio.domain.AddUserRequest;
+import com.wellsfargo.signaturestudio.domain.User;
 import com.wellsfargo.signaturestudio.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -21,25 +21,25 @@ public class UserController {
     }
     
     @GetMapping
-    public ResponseEntity<List<UserDTO>> getUsers(@PathVariable String transactionId) {
-        List<UserDTO> users = userService.getUsers(transactionId);
+    public ResponseEntity<List<User>> getUsers(@PathVariable String transactionId) {
+        List<User> users = userService.getUsers(transactionId);
         return ResponseEntity.ok(users);
     }
     
     @PostMapping
-    public ResponseEntity<UserDTO> addUser(
+    public ResponseEntity<User> addUser(
             @PathVariable String transactionId,
             @Valid @RequestBody AddUserRequest addUserRequest) {
-        UserDTO created = userService.addUser(transactionId, addUserRequest);
+        User created = userService.addUser(transactionId, addUserRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
     
     @PutMapping("/{userId}")
-    public ResponseEntity<UserDTO> updateUser(
+    public ResponseEntity<User> updateUser(
             @PathVariable String transactionId,
             @PathVariable String userId,
-            @Valid @RequestBody UserDTO userDTO) {
-        UserDTO updated = userService.updateUser(transactionId, userId, userDTO);
+            @Valid @RequestBody User userDTO) {
+        User updated = userService.updateUser(transactionId, userId, userDTO);
         return ResponseEntity.ok(updated);
     }
     

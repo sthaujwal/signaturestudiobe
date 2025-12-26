@@ -1,8 +1,8 @@
 package com.wellsfargo.signaturestudio.service;
 
 import com.wellsfargo.signaturestudio.client.AlertServiceClient;
-import com.wellsfargo.signaturestudio.dto.AlertRequestDTO;
-import com.wellsfargo.signaturestudio.dto.EmailTemplateDTO;
+import com.wellsfargo.signaturestudio.domain.AlertRequest;
+import com.wellsfargo.signaturestudio.domain.EmailTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -20,27 +20,27 @@ public class AlertService {
         this.alertServiceClient = alertServiceClient;
     }
     
-    public void sendAlert(AlertRequestDTO alertRequest) {
+    public void sendAlert(AlertRequest alertRequest) {
         logger.info("Sending alert to: {}", alertRequest.getRecipientEmail());
         alertServiceClient.sendAlert(alertRequest);
     }
     
-    public List<EmailTemplateDTO> getTemplates() {
+    public List<EmailTemplate> getTemplates() {
         logger.info("Getting email templates");
         return alertServiceClient.getTemplates();
     }
     
-    public EmailTemplateDTO getTemplate(String templateId) {
+    public EmailTemplate getTemplate(String templateId) {
         logger.info("Getting email template: {}", templateId);
         return alertServiceClient.getTemplate(templateId);
     }
     
-    public void updateTemplate(String templateId, EmailTemplateDTO template) {
+    public void updateTemplate(String templateId, EmailTemplate template) {
         logger.info("Updating email template: {}", templateId);
         alertServiceClient.updateTemplate(templateId, template);
     }
     
-    public EmailTemplateDTO createTemplate(EmailTemplateDTO template) {
+    public EmailTemplate createTemplate(EmailTemplate template) {
         logger.info("Creating email template: {}", template.getName());
         return alertServiceClient.createTemplate(template);
     }

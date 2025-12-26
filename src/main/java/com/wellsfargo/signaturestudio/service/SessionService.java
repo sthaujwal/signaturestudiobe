@@ -1,7 +1,7 @@
 package com.wellsfargo.signaturestudio.service;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
-import com.wellsfargo.signaturestudio.dto.SessionDTO;
+import com.wellsfargo.signaturestudio.domain.Session;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
@@ -35,9 +35,9 @@ public class SessionService {
      * Gets current session information as DTO.
      * 
      * @param session The HTTP session
-     * @return SessionDTO with session information, or null if session is invalid
+     * @return Session with session information, or null if session is invalid
      */
-    public SessionDTO getSessionInfo(HttpSession session) {
+    public Session getSessionInfo(HttpSession session) {
         if (session == null) {
             return null;
         }
@@ -55,7 +55,7 @@ public class SessionService {
         // Update last access time
         updateLastAccessTime(session);
         
-        SessionDTO sessionDTO = new SessionDTO();
+        Session sessionDTO = new Session();
         sessionDTO.setSessionId(session.getId());
         sessionDTO.setUsername(username);
         sessionDTO.setEmail(getEmail(session));
@@ -76,9 +76,9 @@ public class SessionService {
      * Gets current session information from HttpServletRequest.
      * 
      * @param request The HTTP request
-     * @return SessionDTO with session information, or null if session is invalid
+     * @return Session with session information, or null if session is invalid
      */
-    public SessionDTO getSessionInfo(HttpServletRequest request) {
+    public Session getSessionInfo(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         return getSessionInfo(session);
     }
@@ -326,10 +326,10 @@ public class SessionService {
      * Gets current session information using RequestContextHolder.
      * Convenience method - automatically gets session from current request.
      * 
-     * @return SessionDTO with session information, or null if session is invalid
+     * @return Session with session information, or null if session is invalid
      * @throws IllegalStateException if called outside of a request context
      */
-    public SessionDTO getCurrentSessionInfo() {
+    public Session getCurrentSessionInfo() {
         HttpSession session = getCurrentSession();
         if (session == null) {
             throw new IllegalStateException("No active session found. This method must be called within a request context.");
