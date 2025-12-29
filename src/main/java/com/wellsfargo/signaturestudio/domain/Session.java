@@ -1,6 +1,7 @@
 package com.wellsfargo.signaturestudio.domain;
 
 import java.time.Instant;
+import java.util.List;
 
 public class Session {
     private String sessionId;
@@ -9,6 +10,7 @@ public class Session {
     private String accountId;
     private Instant createdAt;
     private Instant expiresAt;
+    private List<AccountWithRole> accountsWithRoles;
     
     // Getters and Setters
     public String getSessionId() {
@@ -57,6 +59,14 @@ public class Session {
     
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+    
+    public List<AccountWithRole> getAccountsWithRoles() {
+        return accountsWithRoles;
+    }
+    
+    public void setAccountsWithRoles(List<AccountWithRole> accountsWithRoles) {
+        this.accountsWithRoles = accountsWithRoles;
     }
 }
 

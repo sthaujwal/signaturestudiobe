@@ -64,6 +64,10 @@ public class SessionService {
         sessionDTO.setEmail(getEmail(session));
         sessionDTO.setAccountId(getAccountId(session));
         
+        // Include accounts with roles from session
+        List<AccountWithRole> accountsWithRoles = getAccountsWithRoles(session);
+        sessionDTO.setAccountsWithRoles(accountsWithRoles);
+        
         // Calculate times
         Long loginTime = (Long) session.getAttribute(SessionConstants.LOGIN_TIME);
         if (loginTime != null) {
