@@ -6,7 +6,9 @@ import com.wellsfargo.signaturestudio.domain.AuthUser;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
 import com.wellsfargo.signaturestudio.model.AccountEntity;
+import com.wellsfargo.signaturestudio.model.AccountRole;
 import com.wellsfargo.signaturestudio.repository.AccountRepository;
+import com.wellsfargo.signaturestudio.repository.AccountRoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -37,9 +39,11 @@ public class AccountService {
     private static final String ROLE_PREFIX = "DPD_SIGNATURE_STUDIO_";
     
     private final AccountRepository accountRepository;
+    private final AccountRoleRepository accountRoleRepository;
     
-    public AccountService(AccountRepository accountRepository) {
+    public AccountService(AccountRepository accountRepository, AccountRoleRepository accountRoleRepository) {
         this.accountRepository = accountRepository;
+        this.accountRoleRepository = accountRoleRepository;
     }
     
     /**
@@ -185,36 +189,43 @@ public class AccountService {
         logger.debug("Found {} roles starting with {} for user: {}", 
             signatureStudioRoles.size(), ROLE_PREFIX, authUser.getUserId());
         
-        // Parse each role to extract account and role type
+        // Find AccountRole by full role name for each role
         for (String fullRoleName : signatureStudioRoles) {
             try {
-                RoleParseResult parseResult = parseRole(fullRoleName);
-                
-                // Find account in database by account key
-                AccountEntity accountEntity = accountRepository.findByAccountKey(parseResult.getAccountKey())
+                // Find AccountRole by full role name
+                AccountRole accountRole = accountRoleRepository.findByRoleName(fullRoleName)
                     .orElse(null);
                 
-                if (accountEntity == null) {
-                    logger.warn("Account not found for account key: {} (from role: {})", 
-                        parseResult.getAccountKey(), fullRoleName);
+                if (accountRole == null) {
+                    logger.warn("AccountRole not found for role name: {}", fullRoleName);
                     continue;
                 }
+                
+                // Get AccountEntity from the relationship
+                AccountEntity accountEntity = accountRole.getAccount();
+                if (accountEntity == null) {
+                    logger.warn("Account not found for role: {}", fullRoleName);
+                    continue;
+                }
+                
+                // Parse role name to extract role type (ADMIN, SENDER, READ_ONLY, etc.)
+                String roleType = extractRoleType(fullRoleName);
                 
                 // Create AccountWithRole object
                 AccountWithRole accountWithRole = new AccountWithRole();
                 accountWithRole.setAccountId(accountEntity.getAccountId());
                 accountWithRole.setAccountName(accountEntity.getAccountName());
                 accountWithRole.setAccountKey(accountEntity.getAccountKey());
-                accountWithRole.setRole(parseResult.getRoleType());
+                accountWithRole.setRole(roleType);
                 accountWithRole.setFullRoleName(fullRoleName);
                 
                 accountsWithRoles.add(accountWithRole);
                 
-                logger.debug("Parsed role: {} -> Account: {}, Role: {}", 
-                    fullRoleName, parseResult.getAccountKey(), parseResult.getRoleType());
+                logger.debug("Found role: {} -> Account: {} ({}), Role: {}", 
+                    fullRoleName, accountEntity.getAccountKey(), accountEntity.getAccountId(), roleType);
                 
             } catch (Exception e) {
-                logger.error("Error parsing role: {}", fullRoleName, e);
+                logger.error("Error processing role: {}", fullRoleName, e);
             }
         }
         
@@ -225,83 +236,46 @@ public class AccountService {
     }
     
     /**
-     * Parse a role name to extract account key and role type.
+     * Extract role type from full role name by checking if it ends with known role types.
      * Role format: DPD_SIGNATURE_STUDIO_{ACCOUNT_KEY}_{ROLE_TYPE}
+     * Examples:
+     * - DPD_SIGNATURE_STUDIO_TEST_ADMIN -> ADMIN
+     * - DPD_SIGNATURE_STUDIO_TEST2_SENDER -> SENDER
+     * - DPD_SIGNATURE_STUDIO_TEST_READ_ONLY -> READ_ONLY
      * 
      * @param fullRoleName Full role name (e.g., DPD_SIGNATURE_STUDIO_TEST_ADMIN)
-     * @return RoleParseResult containing account key and role type
+     * @return Role type (ADMIN, SENDER, READ_ONLY, etc.)
      */
-    private RoleParseResult parseRole(String fullRoleName) {
+    private String extractRoleType(String fullRoleName) {
         if (!fullRoleName.startsWith(ROLE_PREFIX)) {
             throw new IllegalArgumentException("Role does not start with expected prefix: " + ROLE_PREFIX);
         }
         
-        // Remove prefix: DPD_SIGNATURE_STUDIO_
-        String remaining = fullRoleName.substring(ROLE_PREFIX.length());
+        String upperRoleName = fullRoleName.toUpperCase();
         
-        if (remaining.isEmpty()) {
-            throw new IllegalArgumentException("Role has no account and role information: " + fullRoleName);
+        // Check for compound role types first (longer matches first)
+        if (upperRoleName.endsWith("_READ_ONLY")) {
+            return "READ_ONLY";
         }
         
-        // Split by underscore
-        String[] parts = remaining.split("_");
-        
-        if (parts.length < 2) {
-            throw new IllegalArgumentException("Role format invalid: " + fullRoleName + 
-                " (expected: DPD_SIGNATURE_STUDIO_{ACCOUNT_KEY}_{ROLE_TYPE})");
+        // Check for single-word role types (case-insensitive)
+        if (upperRoleName.endsWith("_ADMIN")) {
+            return "ADMIN";
+        }
+        if (upperRoleName.endsWith("_SENDER")) {
+            return "SENDER";
+        }
+        if (upperRoleName.endsWith("_AUDIT")) {
+            return "AUDIT";
         }
         
-        // Find where the role type starts
-        // Role type can be: ADMIN, SENDER, AUDIT, READ_ONLY, etc.
-        // We need to find the last underscore(s) that separate account from role
-        
-        // Common role types: ADMIN, SENDER, AUDIT, READ_ONLY, READ_WRITE
-        // Strategy: The role type is typically the last 1-2 parts
-        // If the last part is "ONLY" or "WRITE", then role type is last 2 parts (e.g., READ_ONLY)
-        // Otherwise, role type is last part (e.g., ADMIN, SENDER, AUDIT)
-        
-        String roleType;
-        String accountKey;
-        
-        if (parts.length >= 2 && (parts[parts.length - 1].equals("ONLY") || 
-                                   parts[parts.length - 1].equals("WRITE"))) {
-            // Role type is compound (e.g., READ_ONLY, READ_WRITE)
-            roleType = parts[parts.length - 2] + "_" + parts[parts.length - 1];
-            // Account key is everything before the last 2 parts
-            accountKey = String.join("_", java.util.Arrays.copyOf(parts, parts.length - 2));
-        } else {
-            // Role type is single word (e.g., ADMIN, SENDER, AUDIT)
-            roleType = parts[parts.length - 1];
-            // Account key is everything before the last part
-            accountKey = String.join("_", java.util.Arrays.copyOf(parts, parts.length - 1));
+        // If no known role type found, extract the last part after the last underscore
+        int lastUnderscore = fullRoleName.lastIndexOf('_');
+        if (lastUnderscore > 0 && lastUnderscore < fullRoleName.length() - 1) {
+            return fullRoleName.substring(lastUnderscore + 1).toUpperCase();
         }
         
-        if (accountKey.isEmpty()) {
-            throw new IllegalArgumentException("Could not extract account key from role: " + fullRoleName);
-        }
-        
-        return new RoleParseResult(accountKey, roleType);
-    }
-    
-    /**
-     * Helper class to hold parsed role information
-     */
-    private static class RoleParseResult {
-        private final String accountKey;
-        private final String roleType;
-        
-        RoleParseResult(String accountKey, String roleType) {
-            this.accountKey = accountKey;
-            this.roleType = roleType;
-        }
-        
-        String getAccountKey() {
-            return accountKey;
-        }
-        
-        String getRoleType() {
-            return roleType;
-        }
+        throw new IllegalArgumentException("Could not extract role type from: " + fullRoleName);
     }
 }
 
