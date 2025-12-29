@@ -1,10 +1,13 @@
 package com.wellsfargo.signaturestudio.domain;
 
+import java.io.Serializable;
+
 /**
  * Domain object representing an account with user's role in that account.
  * Used to return account information along with the user's role (ADMIN, SENDER, AUDIT, etc.)
  */
-public class AccountWithRole {
+public class AccountWithRole implements Serializable {
+    private static final long serialVersionUID = 1L;
     private String accountId;
     private String accountName;
     private String accountKey;

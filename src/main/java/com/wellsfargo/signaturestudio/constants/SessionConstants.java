@@ -28,6 +28,9 @@ public final class SessionConstants {
     /** Session key for user account ID */
     public static final String ACCOUNT_ID = "accountId";
     
+    /** Session key for user's accounts with roles (List<AccountWithRole>) */
+    public static final String ACCOUNTS_WITH_ROLES = "accountsWithRoles";
+    
     /** Session key for authentication status (Boolean) */
     public static final String AUTHENTICATED = "authenticated";
     

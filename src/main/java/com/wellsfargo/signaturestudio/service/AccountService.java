@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import jakarta.servlet.http.HttpSession;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -40,10 +41,14 @@ public class AccountService {
     
     private final AccountRepository accountRepository;
     private final AccountRoleRepository accountRoleRepository;
+    private final SessionService sessionService;
     
-    public AccountService(AccountRepository accountRepository, AccountRoleRepository accountRoleRepository) {
+    public AccountService(AccountRepository accountRepository, 
+                         AccountRoleRepository accountRoleRepository,
+                         SessionService sessionService) {
         this.accountRepository = accountRepository;
         this.accountRoleRepository = accountRoleRepository;
+        this.sessionService = sessionService;
     }
     
     /**
@@ -301,6 +306,45 @@ public class AccountService {
         }
         
         throw new IllegalArgumentException("Could not extract role type from: " + fullRoleName);
+    }
+    
+    /**
+     * Check if user has a specific role for an account.
+     * Uses session data for fast authorization checks.
+     * 
+     * @param accountId The account ID to check
+     * @param requiredRole The required role (ADMIN, SENDER, AUDIT, etc.)
+     * @param session The HTTP session
+     * @return true if user has the required role for the account
+     */
+    public boolean hasRoleForAccount(String accountId, String requiredRole, HttpSession session) {
+        if (accountId == null || requiredRole == null || session == null) {
+            return false;
+        }
+        
+        List<AccountWithRole> accounts = sessionService.getAccountsWithRoles(session);
+        return accounts.stream()
+            .anyMatch(account -> accountId.equals(account.getAccountId()) 
+                && requiredRole.equalsIgnoreCase(account.getRole()));
+    }
+    
+    /**
+     * Get user's role for a specific account from session.
+     * 
+     * @param accountId The account ID
+     * @param session The HTTP session
+     * @return Role name (ADMIN, SENDER, etc.) or null if not found
+     */
+    public String getRoleForAccount(String accountId, HttpSession session) {
+        if (accountId == null || session == null) {
+            return null;
+        }
+        
+        return sessionService.getAccountsWithRoles(session).stream()
+            .filter(account -> accountId.equals(account.getAccountId()))
+            .map(AccountWithRole::getRole)
+            .findFirst()
+            .orElse(null);
     }
 }
 

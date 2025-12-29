@@ -1,6 +1,7 @@
 package com.wellsfargo.signaturestudio.service;
 
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
+import com.wellsfargo.signaturestudio.domain.AccountWithRole;
 import com.wellsfargo.signaturestudio.domain.Session;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -11,6 +12,8 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Service for managing Spring Session operations.
@@ -413,6 +416,43 @@ public class SessionService {
             throw new IllegalStateException("No username found in session");
         }
         return switchAccount(session, newAccountId, username);
+    }
+    
+    /**
+     * Gets user's accounts with roles from session.
+     * 
+     * @param session The HTTP session
+     * @return List of accounts with roles, or empty list if not found
+     */
+    public List<AccountWithRole> getAccountsWithRoles(HttpSession session) {
+        if (session == null) {
+            return new ArrayList<>();
+        }
+        @SuppressWarnings("unchecked")
+        List<AccountWithRole> accounts = (List<AccountWithRole>) 
+            session.getAttribute(SessionConstants.ACCOUNTS_WITH_ROLES);
+        return accounts != null ? accounts : new ArrayList<>();
+    }
+    
+    /**
+     * Gets user's accounts with roles from request.
+     * 
+     * @param request The HTTP request
+     * @return List of accounts with roles, or empty list if not found
+     */
+    public List<AccountWithRole> getAccountsWithRoles(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        return getAccountsWithRoles(session);
+    }
+    
+    /**
+     * Gets current user's accounts with roles using RequestContextHolder.
+     * 
+     * @return List of accounts with roles, or empty list if not found
+     */
+    public List<AccountWithRole> getCurrentAccountsWithRoles() {
+        HttpSession session = getCurrentSession();
+        return getAccountsWithRoles(session);
     }
 }
 
