@@ -174,65 +174,90 @@ public class AccountService {
     public List<AccountWithRole> getAccountsWithRoles(AuthUser authUser) {
         logger.info("Getting accounts with roles for user: {}", authUser.getUserId());
         
-        if (authUser.getRoles() == null || authUser.getRoles().isEmpty()) {
+        if (hasNoRoles(authUser)) {
             logger.warn("No roles found for user: {}", authUser.getUserId());
             return new ArrayList<>();
         }
         
-        List<AccountWithRole> accountsWithRoles = new ArrayList<>();
-        
-        // Filter roles that start with DPD_SIGNATURE_STUDIO_
-        List<String> signatureStudioRoles = authUser.getRoles().stream()
-            .filter(role -> role.startsWith(ROLE_PREFIX))
-            .collect(Collectors.toList());
-        
+        List<String> signatureStudioRoles = filterSignatureStudioRoles(authUser.getRoles());
         logger.debug("Found {} roles starting with {} for user: {}", 
             signatureStudioRoles.size(), ROLE_PREFIX, authUser.getUserId());
         
-        // Find AccountRole by full role name for each role
-        for (String fullRoleName : signatureStudioRoles) {
-            try {
-                // Find AccountRole by full role name
-                AccountRole accountRole = accountRoleRepository.findByRoleName(fullRoleName)
-                    .orElse(null);
-                
-                if (accountRole == null) {
-                    logger.warn("AccountRole not found for role name: {}", fullRoleName);
-                    continue;
-                }
-                
-                // Get AccountEntity from the relationship
-                AccountEntity accountEntity = accountRole.getAccount();
-                if (accountEntity == null) {
-                    logger.warn("Account not found for role: {}", fullRoleName);
-                    continue;
-                }
-                
-                // Parse role name to extract role type (ADMIN, SENDER, READ_ONLY, etc.)
-                String roleType = extractRoleType(fullRoleName);
-                
-                // Create AccountWithRole object
-                AccountWithRole accountWithRole = new AccountWithRole();
-                accountWithRole.setAccountId(accountEntity.getAccountId());
-                accountWithRole.setAccountName(accountEntity.getAccountName());
-                accountWithRole.setAccountKey(accountEntity.getAccountKey());
-                accountWithRole.setRole(roleType);
-                accountWithRole.setFullRoleName(fullRoleName);
-                
-                accountsWithRoles.add(accountWithRole);
-                
-                logger.debug("Found role: {} -> Account: {} ({}), Role: {}", 
-                    fullRoleName, accountEntity.getAccountKey(), accountEntity.getAccountId(), roleType);
-                
-            } catch (Exception e) {
-                logger.error("Error processing role: {}", fullRoleName, e);
-            }
-        }
+        List<AccountWithRole> accountsWithRoles = signatureStudioRoles.stream()
+            .map(this::processRole)
+            .filter(java.util.Objects::nonNull)
+            .collect(Collectors.toList());
         
         logger.info("Found {} accounts with roles for user: {}", 
             accountsWithRoles.size(), authUser.getUserId());
         
         return accountsWithRoles;
+    }
+    
+    /**
+     * Check if user has no roles.
+     */
+    private boolean hasNoRoles(AuthUser authUser) {
+        return authUser.getRoles() == null || authUser.getRoles().isEmpty();
+    }
+    
+    /**
+     * Filter roles that start with DPD_SIGNATURE_STUDIO_ prefix.
+     */
+    private List<String> filterSignatureStudioRoles(List<String> roles) {
+        return roles.stream()
+            .filter(role -> role != null && role.startsWith(ROLE_PREFIX))
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * Process a single role and convert it to AccountWithRole.
+     * Returns null if role cannot be processed.
+     */
+    private AccountWithRole processRole(String fullRoleName) {
+        try {
+            return accountRoleRepository.findByRoleName(fullRoleName)
+                .map(this::createAccountWithRole)
+                .orElseGet(() -> {
+                    logger.warn("AccountRole not found for role name: {}", fullRoleName);
+                    return null;
+                });
+        } catch (Exception e) {
+            logger.error("Error processing role: {}", fullRoleName, e);
+            return null;
+        }
+    }
+    
+    /**
+     * Create AccountWithRole from AccountRole entity.
+     */
+    private AccountWithRole createAccountWithRole(AccountRole accountRole) {
+        AccountEntity accountEntity = accountRole.getAccount();
+        if (accountEntity == null) {
+            logger.warn("Account not found for role: {}", accountRole.getRoleName());
+            return null;
+        }
+        
+        String roleType = extractRoleType(accountRole.getRoleName());
+        AccountWithRole accountWithRole = buildAccountWithRole(accountEntity, accountRole.getRoleName(), roleType);
+        
+        logger.debug("Found role: {} -> Account: {} ({}), Role: {}", 
+            accountRole.getRoleName(), accountEntity.getAccountKey(), accountEntity.getAccountId(), roleType);
+        
+        return accountWithRole;
+    }
+    
+    /**
+     * Build AccountWithRole domain object from AccountEntity and role information.
+     */
+    private AccountWithRole buildAccountWithRole(AccountEntity accountEntity, String fullRoleName, String roleType) {
+        AccountWithRole accountWithRole = new AccountWithRole();
+        accountWithRole.setAccountId(accountEntity.getAccountId());
+        accountWithRole.setAccountName(accountEntity.getAccountName());
+        accountWithRole.setAccountKey(accountEntity.getAccountKey());
+        accountWithRole.setRole(roleType);
+        accountWithRole.setFullRoleName(fullRoleName);
+        return accountWithRole;
     }
     
     /**
