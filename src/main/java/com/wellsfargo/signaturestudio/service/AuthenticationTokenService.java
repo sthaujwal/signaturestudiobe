@@ -9,9 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,18 +30,13 @@ public class AuthenticationTokenService {
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationTokenService.class);
 
     // Configuration constants
-    private static final int AUTHORIZATION_CODE_LENGTH = 32;  // bytes
     private static final int AUTHORIZATION_CODE_VALIDITY_MIN = 1;  // 1 minute
-
-    private static final int ACCESS_TOKEN_LENGTH = 48;  // bytes
     private static final int ACCESS_TOKEN_VALIDITY_MIN = 30;  // 30 minutes
 
     private final AuthenticationTokenRepository tokenRepository;
-    private final SecureRandom secureRandom;
 
     public AuthenticationTokenService(AuthenticationTokenRepository tokenRepository) {
         this.tokenRepository = tokenRepository;
-        this.secureRandom = new SecureRandom();
     }
 
     /**
@@ -57,7 +50,6 @@ public class AuthenticationTokenService {
         return generateToken(
             sessionId,
             TokenType.AUTHORIZATION_CODE,
-            AUTHORIZATION_CODE_LENGTH,
             AUTHORIZATION_CODE_VALIDITY_MIN
         );
     }
@@ -73,36 +65,29 @@ public class AuthenticationTokenService {
         return generateToken(
             sessionId,
             TokenType.ACCESS_TOKEN,
-            ACCESS_TOKEN_LENGTH,
             ACCESS_TOKEN_VALIDITY_MIN
         );
     }
 
     /**
-     * Internal method to generate token with JSON metadata in CLOB.
+     * Internal method to generate token.
      * Returns the token ID (authentication_token_id), which is used as the token value.
      * This provides optimal performance using primary key lookups.
+     *
+     * SIMPLIFIED: auth_obj just stores sessionId as plain string (no JSON).
      */
-    private String generateToken(String sessionId, TokenType tokenType, int lengthBytes, int validityMinutes) {
+    private String generateToken(String sessionId, TokenType tokenType, int validityMinutes) {
         // Generate UUID as token ID (this becomes the token value for optimal lookups)
         String tokenId = UUID.randomUUID().toString();
 
-        // Generate additional random data for JSON metadata (optional, for extra security)
-        byte[] randomBytes = new byte[lengthBytes];
-        secureRandom.nextBytes(randomBytes);
-        String additionalEntropy = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
-
-        // Create token entity with JSON metadata
+        // Create token entity
         AuthenticationToken token = new AuthenticationToken();
         token.setAuthenticationTokenId(tokenId);
         token.setTokenType(tokenType);
         token.setSysId(sessionId);
+        token.setAuthObj(sessionId);  // Store sessionId as plain string (no JSON!)
         token.setExpirProdInMin(validityMinutes);
         token.setNextExpirTmstp(Instant.now().plusSeconds(validityMinutes * 60L));
-
-        // Set token value in metadata (will be serialized to JSON in auth_obj CLOB)
-        // Store the tokenId as tokenValue for consistency
-        token.setTokenValue(tokenId);
 
         tokenRepository.save(token);
 
@@ -115,23 +100,21 @@ public class AuthenticationTokenService {
 
     /**
      * Validate and consume authorization code (ONE-TIME USE).
-     * Returns session ID if valid, empty if invalid/expired/already used.
+     * Returns session ID if valid, empty if invalid/expired.
      *
-     * RACE-CONDITION PROOF DESIGN:
-     * - Generates UTC timestamps in Java before query execution
-     * - Builds complete JSON metadata with timestamps
-     * - Single atomic UPDATE with optimistic locking
-     * - No time gap between timestamp generation and database update
+     * SIMPLIFIED DESIGN:
+     * - Find valid authorization code
+     * - Delete it immediately (one-time use)
+     * - Return session ID for access token generation
      *
-     * DISTRIBUTED SYSTEM IMPROVEMENTS:
-     * - All timestamps are UTC (no timezone confusion)
-     * - Pre-built JSON eliminates string concatenation race conditions
-     * - Prevents replay attacks across data centers
+     * DISTRIBUTED SYSTEM:
+     * - DELETE is atomic and idempotent
+     * - If code already deleted, find returns empty (prevents replay)
      * - Uses primary key lookup for optimal performance
      *
      * Security features:
-     * - One-time use (marks as consumed atomically)
-     * - Prevents replay attacks
+     * - One-time use (deleted after consumption)
+     * - Prevents replay attacks (code no longer exists after use)
      * - UTC-based expiration check
      *
      * @param tokenId The authorization code ID (authentication_token_id) to validate
@@ -139,11 +122,16 @@ public class AuthenticationTokenService {
      */
     @Transactional
     public Optional<String> validateAndConsumeAuthorizationCode(String tokenId) {
-        // Generate UTC timestamp FIRST (consistent time reference for all operations)
+        // Generate UTC timestamp FIRST (consistent time reference)
         Instant currentUtc = Instant.now();
 
-        // Fetch the token to get current metadata
-        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenById(tokenId, currentUtc);
+        // Fetch valid token using Spring Data JPA method name (NO CAST needed!)
+        Optional<AuthenticationToken> tokenOpt = tokenRepository
+            .findByAuthenticationTokenIdAndTokenTypeAndNextExpirTmstpAfter(
+                tokenId,
+                TokenType.AUTHORIZATION_CODE,
+                currentUtc
+            );
 
         if (tokenOpt.isEmpty()) {
             logger.warn("Authorization code not found or expired: {}", tokenId);
@@ -151,62 +139,12 @@ public class AuthenticationTokenService {
         }
 
         AuthenticationToken token = tokenOpt.get();
-
-        // Check if already used
-        if (token.isUsed()) {
-            logger.warn("Authorization code already used: {}", tokenId);
-            return Optional.empty();
-        }
-
-        // Use same timestamp for update (eliminates race conditions)
-        Instant updateTimestamp = currentUtc;
-
-        // Parse existing metadata and update it
-        AuthenticationToken.TokenMetadata metadata;
-        try {
-            if (token.getAuthObj() != null) {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-                metadata = mapper.readValue(token.getAuthObj(), AuthenticationToken.TokenMetadata.class);
-            } else {
-                metadata = new AuthenticationToken.TokenMetadata();
-            }
-        } catch (Exception e) {
-            logger.error("Failed to parse token metadata", e);
-            metadata = new AuthenticationToken.TokenMetadata();
-        }
-
-        // Update metadata with UTC timestamps
-        metadata.used = true;
-        metadata.usedAt = currentUtc;
-        metadata.tokenValue = tokenId;  // Keep token value
-
-        // Serialize to JSON (pre-built, no string concatenation in query)
-        String updatedJsonMetadata;
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-            updatedJsonMetadata = mapper.writeValueAsString(metadata);
-        } catch (Exception e) {
-            logger.error("Failed to serialize token metadata", e);
-            return Optional.empty();
-        }
-
-        // Atomically mark code as used with pre-built JSON and UTC timestamps
-        int updated = tokenRepository.markAuthorizationCodeAsUsed(
-            tokenId,
-            updatedJsonMetadata,
-            currentUtc,
-            updateTimestamp
-        );
-
-        if (updated == 0) {
-            logger.warn("Authorization code invalid, already used, or expired (race condition): {}", tokenId);
-            return Optional.empty();
-        }
-
         String sessionId = token.getSysId();
-        logger.info("Authorization code consumed for session: {}", sessionId);
+
+        // Delete the authorization code (one-time use - simpler than marking as used!)
+        tokenRepository.delete(token);
+
+        logger.info("Authorization code consumed and deleted for session: {}", sessionId);
         return Optional.of(sessionId);
     }
 
@@ -239,8 +177,13 @@ public class AuthenticationTokenService {
         // Generate UTC timestamp FIRST (consistent time reference for all operations)
         Instant currentUtc = Instant.now();
 
-        // Fetch the token to get current metadata
-        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenById(tokenId, currentUtc);
+        // Fetch valid token using Spring Data JPA method name (NO CAST needed!)
+        Optional<AuthenticationToken> tokenOpt = tokenRepository
+            .findByAuthenticationTokenIdAndTokenTypeAndNextExpirTmstpAfter(
+                tokenId,
+                TokenType.ACCESS_TOKEN,
+                currentUtc
+            );
 
         if (tokenOpt.isEmpty()) {
             logger.warn("Access token not found or expired: {}", tokenId);
@@ -249,57 +192,15 @@ public class AuthenticationTokenService {
 
         AuthenticationToken token = tokenOpt.get();
 
-        // Calculate new expiration and update timestamp (based on same UTC time)
-        Instant newExpirationUtc = currentUtc.plusSeconds(ACCESS_TOKEN_VALIDITY_MIN * 60L);
-        Instant updateTimestamp = currentUtc;
+        // Extend expiration using entity method (updates both expiration and JSON metadata)
+        token.extendExpiration(ACCESS_TOKEN_VALIDITY_MIN);
 
-        // Parse existing metadata and update it
-        AuthenticationToken.TokenMetadata metadata;
-        try {
-            if (token.getAuthObj() != null) {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-                metadata = mapper.readValue(token.getAuthObj(), AuthenticationToken.TokenMetadata.class);
-            } else {
-                metadata = new AuthenticationToken.TokenMetadata();
-            }
-        } catch (Exception e) {
-            logger.error("Failed to parse token metadata", e);
-            metadata = new AuthenticationToken.TokenMetadata();
-        }
-
-        // Update metadata with UTC timestamp
-        metadata.lastUsedAt = currentUtc;
-        metadata.tokenValue = tokenId;  // Keep token value
-
-        // Serialize to JSON (pre-built, no string concatenation in query)
-        String updatedJsonMetadata;
-        try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-            updatedJsonMetadata = mapper.writeValueAsString(metadata);
-        } catch (Exception e) {
-            logger.error("Failed to serialize token metadata", e);
-            return Optional.empty();
-        }
-
-        // Atomically extend token with pre-built JSON and UTC timestamps
-        int updated = tokenRepository.extendAccessTokenExpiration(
-            tokenId,
-            newExpirationUtc,
-            updatedJsonMetadata,
-            currentUtc,
-            updateTimestamp
-        );
-
-        if (updated == 0) {
-            logger.warn("Access token not found, expired, or invalid (race condition): {}", tokenId);
-            return Optional.empty();
-        }
+        // Save - Hibernate generates UPDATE automatically (NO CAST needed!)
+        tokenRepository.save(token);
 
         String sessionId = token.getSysId();
         logger.debug("Access token validated and extended for session: {} (new expiration: {})",
-            sessionId, newExpirationUtc);
+            sessionId, token.getNextExpirTmstp());
         return Optional.of(sessionId);
     }
 
@@ -350,17 +251,16 @@ public class AuthenticationTokenService {
     public void cleanupExpiredTokens() {
         // Generate UTC timestamp BEFORE queries (consistent time reference)
         Instant currentUtc = Instant.now();
-        Instant cutoffUtc = currentUtc.minusSeconds(5 * 60);  // 5 minutes ago
 
-        // Delete expired tokens (uses UTC comparison)
-        int expiredCount = tokenRepository.deleteExpiredTokens(currentUtc);
+        // Delete expired tokens using Spring Data JPA method name (NO CAST needed!)
+        // This includes both expired authorization codes and expired access tokens
+        int expiredCount = tokenRepository.deleteByNextExpirTmstpBefore(currentUtc);
 
-        // Delete old used authorization codes (keep for 5 min audit trail)
-        int usedCodesCount = tokenRepository.deleteOldUsedAuthorizationCodes(cutoffUtc);
-
-        if (expiredCount > 0 || usedCodesCount > 0) {
-            logger.info("Cleanup: {} expired tokens, {} old authorization codes (cutoff: {})",
-                expiredCount, usedCodesCount, cutoffUtc);
+        if (expiredCount > 0) {
+            logger.info("Cleanup: {} expired tokens deleted", expiredCount);
         }
+
+        // Note: Authorization codes are deleted immediately after use,
+        // so we don't need a separate cleanup for "used" codes
     }
 }

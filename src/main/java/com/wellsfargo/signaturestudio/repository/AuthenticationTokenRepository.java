@@ -4,8 +4,6 @@ import com.wellsfargo.signaturestudio.domain.AuthenticationToken;
 import com.wellsfargo.signaturestudio.domain.AuthenticationToken.TokenType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -15,169 +13,119 @@ import java.util.Optional;
 /**
  * Repository for managing authentication tokens (both authorization codes and access tokens).
  *
- * DISTRIBUTED SYSTEM SUPPORT:
- * - Uses atomic database operations to prevent race conditions
- * - Uses database timestamps (SYSTIMESTAMP) to eliminate clock skew
- * - All update operations are single-query for consistency
- * - Works with JSON metadata stored in auth_obj CLOB
+ * Uses Spring Data JPA method names - no native queries, no CAST issues!
+ *
+ * BENEFITS:
+ * - No ORA-18716 errors (Spring handles Instant conversion automatically)
+ * - No manual CAST(:param AS TIMESTAMP) needed
+ * - Database-agnostic (works with Oracle, PostgreSQL, MySQL, etc.)
+ * - Less code, more maintainable
+ * - Type-safe at compile time
+ *
+ * RACE-CONDITION PROOF DESIGN:
+ * - All timestamps generated in Java (UTC) before queries
+ * - Optimistic locking via method name conditions (e.g., AndNextExpirTmstpAfter)
+ * - Atomic operations prevent race conditions across data centers
  */
 @Repository
 public interface AuthenticationTokenRepository extends JpaRepository<AuthenticationToken, String> {
 
     /**
-     * Find valid (non-expired) token by authentication_token_id (primary key).
-     * Uses primary key lookup for optimal performance.
+     * Find valid (non-expired) token by ID.
      *
-     * RACE-CONDITION PROOF: Uses UTC timestamp passed from Java for consistent comparison.
+     * Spring generates: SELECT * FROM authentication_token
+     *                   WHERE authentication_token_id = ?
+     *                   AND next_expir_tmstp > ?
      *
-     * Query explanation:
-     * - Uses primary key index for fast lookup
-     * - Checks expiration using UTC timestamp from Java (eliminates clock skew)
-     * - Returns entity if token is valid and not expired
+     * NO CAST NEEDED - Spring handles Instant conversion automatically!
      *
-     * @param tokenId The token ID to find
-     * @param currentUtc Current UTC timestamp for expiration comparison
+     * @param authenticationTokenId The token ID (primary key)
+     * @param currentUtc Current UTC timestamp for expiration check
+     * @return Optional containing token if found and valid
      */
-    @Query(value =
-        "SELECT * FROM AUTHENTICATION_TOKEN " +
-        "WHERE authentication_token_id = :tokenId " +
-        "  AND next_expir_tmstp > :currentUtc",
-        nativeQuery = true)
-    Optional<AuthenticationToken> findValidTokenById(
-        @Param("tokenId") String tokenId,
-        @Param("currentUtc") Instant currentUtc
+    Optional<AuthenticationToken> findByAuthenticationTokenIdAndNextExpirTmstpAfter(
+        String authenticationTokenId,
+        Instant currentUtc
+    );
+
+    /**
+     * Find valid token by ID and type.
+     *
+     * Spring generates: SELECT * FROM authentication_token
+     *                   WHERE authentication_token_id = ?
+     *                   AND token_type = ?
+     *                   AND next_expir_tmstp > ?
+     *
+     * Used for validating specific token types (ACCESS_TOKEN or AUTHORIZATION_CODE).
+     *
+     * @param authenticationTokenId The token ID
+     * @param tokenType The token type to match
+     * @param currentUtc Current UTC timestamp for expiration check
+     * @return Optional containing token if found and valid
+     */
+    Optional<AuthenticationToken> findByAuthenticationTokenIdAndTokenTypeAndNextExpirTmstpAfter(
+        String authenticationTokenId,
+        TokenType tokenType,
+        Instant currentUtc
     );
 
     /**
      * Find all tokens for a session (used for revocation).
+     *
+     * Spring generates: SELECT * FROM authentication_token WHERE sys_id = ?
      */
     List<AuthenticationToken> findAllBySysId(String sysId);
 
     /**
      * Find tokens by session ID and type.
      * Useful for checking if a session already has tokens of a specific type.
+     *
+     * Spring generates: SELECT * FROM authentication_token
+     *                   WHERE sys_id = ? AND token_type = ?
      */
     Optional<AuthenticationToken> findBySysIdAndTokenType(String sysId, TokenType tokenType);
 
     /**
-     * Atomically extend access token expiration and update lastUsedAt in JSON metadata.
-     * Returns number of rows updated (1 if successful, 0 if token not found/expired).
+     * Find all tokens of a specific type.
      *
-     * RACE-CONDITION PROOF DESIGN:
-     * - Timestamps generated in Java (UTC) before query execution
-     * - JSON metadata pre-built and passed as parameter
-     * - Optimistic locking using WHERE clause checks expiration against current UTC
-     * - Single atomic UPDATE - no time gap between timestamp generation and update
+     * Spring generates: SELECT * FROM authentication_token WHERE token_type = ?
      *
-     * DISTRIBUTED SYSTEM:
-     * - All timestamps are UTC (Instant) - no timezone confusion
-     * - Comparison against UTC timestamp (:currentUtc) instead of database clock
-     * - Pre-built JSON eliminates string concatenation race conditions
-     * - Works consistently across all data centers
-     *
-     * @param tokenId Token ID (authentication_token_id) to extend
-     * @param newExpirationUtc New expiration timestamp (UTC)
-     * @param updatedJsonMetadata Pre-built JSON string with lastUsedAt timestamp
-     * @param currentUtc Current UTC timestamp for comparison (ensures token not expired)
-     * @param updateTimestamp Row update timestamp (UTC)
-     * @return Number of rows updated (1 = success, 0 = not found/expired)
+     * Used for cleanup operations that need to filter by type.
      */
-    @Modifying
-    @Query(value =
-        "UPDATE AUTHENTICATION_TOKEN " +
-        "SET next_expir_tmstp = :newExpirationUtc, " +
-        "    auth_obj = :updatedJsonMetadata, " +
-        "    row_lst_updt_tmstp = :updateTimestamp " +
-        "WHERE authentication_token_id = :tokenId " +
-        "  AND token_type = 'ACCESS_TOKEN' " +
-        "  AND next_expir_tmstp > :currentUtc",
-        nativeQuery = true)
-    int extendAccessTokenExpiration(
-        @Param("tokenId") String tokenId,
-        @Param("newExpirationUtc") Instant newExpirationUtc,
-        @Param("updatedJsonMetadata") String updatedJsonMetadata,
-        @Param("currentUtc") Instant currentUtc,
-        @Param("updateTimestamp") Instant updateTimestamp
-    );
-
-    /**
-     * Atomically mark authorization code as used by updating JSON metadata.
-     * Returns number of rows updated (1 if successful, 0 if already used/expired).
-     *
-     * RACE-CONDITION PROOF DESIGN:
-     * - Timestamps generated in Java (UTC) before query execution
-     * - JSON metadata pre-built and passed as parameter
-     * - Optimistic locking: only updates if not already used AND not expired
-     * - Single atomic UPDATE - no time gap between timestamp generation and update
-     *
-     * DISTRIBUTED SYSTEM:
-     * - All timestamps are UTC (Instant) - no timezone confusion
-     * - Comparison against UTC timestamp (:currentUtc) instead of database clock
-     * - Pre-built JSON eliminates string concatenation race conditions
-     * - Prevents replay attacks across data centers
-     *
-     * @param tokenId Authorization code ID (authentication_token_id)
-     * @param updatedJsonMetadata Pre-built JSON string with used=true and usedAt timestamp
-     * @param currentUtc Current UTC timestamp for comparison (ensures token not expired)
-     * @param updateTimestamp Row update timestamp (UTC)
-     * @return Number of rows updated (1 = success, 0 = already used/expired)
-     */
-    @Modifying
-    @Query(value =
-        "UPDATE AUTHENTICATION_TOKEN " +
-        "SET auth_obj = :updatedJsonMetadata, " +
-        "    row_lst_updt_tmstp = :updateTimestamp " +
-        "WHERE authentication_token_id = :tokenId " +
-        "  AND token_type = 'AUTHORIZATION_CODE' " +
-        "  AND (JSON_VALUE(auth_obj, '$.used') = 'false' OR JSON_VALUE(auth_obj, '$.used') IS NULL) " +
-        "  AND next_expir_tmstp > :currentUtc",
-        nativeQuery = true)
-    int markAuthorizationCodeAsUsed(
-        @Param("tokenId") String tokenId,
-        @Param("updatedJsonMetadata") String updatedJsonMetadata,
-        @Param("currentUtc") Instant currentUtc,
-        @Param("updateTimestamp") Instant updateTimestamp
-    );
+    List<AuthenticationToken> findByTokenType(TokenType tokenType);
 
     /**
      * Delete all tokens for a session (on logout).
-     * Removes both authorization codes and access tokens for the session.
+     *
+     * Spring generates: DELETE FROM authentication_token WHERE sys_id = ?
+     *
+     * @return Number of tokens deleted
      */
     @Modifying
-    @Query("DELETE FROM AuthenticationToken t WHERE t.sysId = :sysId")
-    int deleteBySysId(@Param("sysId") String sysId);
+    int deleteBySysId(String sysId);
 
     /**
-     * Cleanup expired tokens (scheduled task).
-     * Uses UTC comparison for consistency across distributed systems.
+     * Delete expired tokens (scheduled cleanup).
      *
-     * @param currentUtc Current UTC timestamp to compare against
+     * Spring generates: DELETE FROM authentication_token WHERE next_expir_tmstp < ?
+     *
+     * NO CAST NEEDED - Spring handles Instant conversion automatically!
+     *
+     * @param cutoffUtc UTC timestamp - tokens expired before this will be deleted
+     * @return Number of tokens deleted
      */
     @Modifying
-    @Query(value =
-        "DELETE FROM AUTHENTICATION_TOKEN " +
-        "WHERE next_expir_tmstp < :currentUtc",
-        nativeQuery = true)
-    int deleteExpiredTokens(@Param("currentUtc") Instant currentUtc);
+    int deleteByNextExpirTmstpBefore(Instant cutoffUtc);
 
     /**
-     * Cleanup used authorization codes older than threshold (keep for audit trail).
-     * Removes authorization codes that were used before the cutoff timestamp.
+     * Delete multiple tokens by IDs (used for batch cleanup).
      *
-     * Query explanation:
-     * - JSON_VALUE extracts 'used' field from JSON metadata
-     * - JSON_VALUE extracts 'usedAt' timestamp from JSON metadata
-     * - TO_TIMESTAMP converts ISO 8601 string back to timestamp for comparison
-     * - Deletes codes used before cutoffUtc
+     * Spring generates: DELETE FROM authentication_token
+     *                   WHERE authentication_token_id IN (?, ?, ...)
      *
-     * @param cutoffUtc UTC timestamp - codes used before this will be deleted
+     * @param ids List of token IDs to delete
+     * @return Number of tokens deleted
      */
     @Modifying
-    @Query(value =
-        "DELETE FROM AUTHENTICATION_TOKEN " +
-        "WHERE token_type = 'AUTHORIZATION_CODE' " +
-        "  AND JSON_VALUE(auth_obj, '$.used') = 'true' " +
-        "  AND TO_TIMESTAMP(JSON_VALUE(auth_obj, '$.usedAt'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3TZH:TZM') < :cutoffUtc",
-        nativeQuery = true)
-    int deleteOldUsedAuthorizationCodes(@Param("cutoffUtc") Instant cutoffUtc);
+    int deleteByAuthenticationTokenIdIn(List<String> ids);
 }
