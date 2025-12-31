@@ -76,7 +76,7 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
     @Query(value =
         "UPDATE AUTHENTICATION_TOKEN " +
         "SET next_expir_tmstp = SYSTIMESTAMP + NUMTODSINTERVAL(:validityMinutes, 'MINUTE'), " +
-        "    auth_obj = JSON_TRANSFORM(auth_obj, SET '$.lastUsedAt' = TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')), " +
+        "    auth_obj = JSON_MERGEPATCH(auth_obj, '{\"lastUsedAt\":\"' || TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"') || '\"}'), " +
         "    row_lst_updt_tmstp = SYSTIMESTAMP " +
         "WHERE authentication_token_id = :tokenId " +
         "  AND token_type = 'ACCESS_TOKEN' " +
@@ -109,9 +109,7 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
     @Modifying
     @Query(value =
         "UPDATE AUTHENTICATION_TOKEN " +
-        "SET auth_obj = JSON_TRANSFORM(auth_obj, " +
-        "       SET '$.used' = 'true', " +
-        "       SET '$.usedAt' = TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')), " +
+        "SET auth_obj = JSON_MERGEPATCH(auth_obj, '{\"used\":true,\"usedAt\":\"' || TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"') || '\"}'), " +
         "    row_lst_updt_tmstp = SYSTIMESTAMP " +
         "WHERE authentication_token_id = :tokenId " +
         "  AND token_type = 'AUTHORIZATION_CODE' " +
