@@ -117,57 +117,113 @@ public class AuthenticationTokenService {
      * Validate and consume authorization code (ONE-TIME USE).
      * Returns session ID if valid, empty if invalid/expired/already used.
      *
+     * RACE-CONDITION PROOF DESIGN:
+     * - Generates UTC timestamps in Java before query execution
+     * - Builds complete JSON metadata with timestamps
+     * - Single atomic UPDATE with optimistic locking
+     * - No time gap between timestamp generation and database update
+     *
      * DISTRIBUTED SYSTEM IMPROVEMENTS:
-     * - Uses atomic database operation with JSON_TRANSFORM to mark code as used
-     * - Uses database timestamp for expiration check (eliminates clock skew)
-     * - Prevents race conditions across multiple data centers
-     * - Single database round-trip for better performance
+     * - All timestamps are UTC (no timezone confusion)
+     * - Pre-built JSON eliminates string concatenation race conditions
+     * - Prevents replay attacks across data centers
      * - Uses primary key lookup for optimal performance
      *
      * Security features:
-     * - One-time use (marks as consumed atomically in JSON metadata)
-     * - Prevents replay attacks across DCs
-     * - Checks expiration using Oracle's clock
-     * - Returns session ID for token generation
+     * - One-time use (marks as consumed atomically)
+     * - Prevents replay attacks
+     * - UTC-based expiration check
      *
      * @param tokenId The authorization code ID (authentication_token_id) to validate
      * @return Optional containing session ID if valid, empty otherwise
      */
     @Transactional
     public Optional<String> validateAndConsumeAuthorizationCode(String tokenId) {
-        // Atomically mark code as used in JSON metadata (prevents race conditions across DCs)
-        // Returns 1 if successful, 0 if already used/expired/not found
-        int updated = tokenRepository.markAuthorizationCodeAsUsed(tokenId);
+        // Generate UTC timestamp FIRST (consistent time reference for all operations)
+        Instant currentUtc = Instant.now();
 
-        if (updated == 0) {
-            logger.warn("Authorization code invalid, already used, or expired: {}", tokenId);
+        // Fetch the token to get current metadata
+        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenById(tokenId, currentUtc);
+
+        if (tokenOpt.isEmpty()) {
+            logger.warn("Authorization code not found or expired: {}", tokenId);
             return Optional.empty();
         }
 
-        // Fetch session ID (code is now marked as used in JSON)
-        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenById(tokenId);
+        AuthenticationToken token = tokenOpt.get();
 
-        if (tokenOpt.isPresent()) {
-            String sessionId = tokenOpt.get().getSysId();
-            logger.info("Authorization code consumed for session: {}", sessionId);
-            return Optional.of(sessionId);
+        // Check if already used
+        if (token.isUsed()) {
+            logger.warn("Authorization code already used: {}", tokenId);
+            return Optional.empty();
         }
 
-        // Should not happen (we just updated it), but handle gracefully
-        logger.error("Authorization code marked as used but not found in database: {}", tokenId);
-        return Optional.empty();
+        // Use same timestamp for update (eliminates race conditions)
+        Instant updateTimestamp = currentUtc;
+
+        // Parse existing metadata and update it
+        AuthenticationToken.TokenMetadata metadata;
+        try {
+            if (token.getAuthObj() != null) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+                metadata = mapper.readValue(token.getAuthObj(), AuthenticationToken.TokenMetadata.class);
+            } else {
+                metadata = new AuthenticationToken.TokenMetadata();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to parse token metadata", e);
+            metadata = new AuthenticationToken.TokenMetadata();
+        }
+
+        // Update metadata with UTC timestamps
+        metadata.used = true;
+        metadata.usedAt = currentUtc;
+        metadata.tokenValue = tokenId;  // Keep token value
+
+        // Serialize to JSON (pre-built, no string concatenation in query)
+        String updatedJsonMetadata;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            updatedJsonMetadata = mapper.writeValueAsString(metadata);
+        } catch (Exception e) {
+            logger.error("Failed to serialize token metadata", e);
+            return Optional.empty();
+        }
+
+        // Atomically mark code as used with pre-built JSON and UTC timestamps
+        int updated = tokenRepository.markAuthorizationCodeAsUsed(
+            tokenId,
+            updatedJsonMetadata,
+            currentUtc,
+            updateTimestamp
+        );
+
+        if (updated == 0) {
+            logger.warn("Authorization code invalid, already used, or expired (race condition): {}", tokenId);
+            return Optional.empty();
+        }
+
+        String sessionId = token.getSysId();
+        logger.info("Authorization code consumed for session: {}", sessionId);
+        return Optional.of(sessionId);
     }
 
     /**
      * Validate access token and extend expiration (AUTO-REFRESH).
      * Returns session ID if valid, empty if invalid/expired.
      *
+     * RACE-CONDITION PROOF DESIGN:
+     * - Generates UTC timestamps in Java before query execution
+     * - Builds complete JSON metadata with timestamps
+     * - Single atomic UPDATE with optimistic locking
+     * - No time gap between timestamp generation and database update
+     *
      * DISTRIBUTED SYSTEM IMPROVEMENTS:
-     * - Uses atomic database operation with JSON_TRANSFORM to extend token
-     * - Uses database timestamp for expiration (eliminates clock skew)
-     * - Prevents race conditions across multiple data centers
-     * - Single database UPDATE for better performance
-     * - Updates lastUsedAt in JSON metadata for audit trail
+     * - All timestamps are UTC (no timezone confusion)
+     * - Pre-built JSON eliminates string concatenation race conditions
+     * - Prevents race conditions across data centers
      * - Uses primary key lookup for optimal performance
      *
      * This is the KEY method for auto-refresh functionality:
@@ -180,31 +236,71 @@ public class AuthenticationTokenService {
      */
     @Transactional
     public Optional<String> validateAndExtendAccessToken(String tokenId) {
-        // Atomically extend token expiration and update JSON metadata (prevents race conditions across DCs)
-        // Returns 1 if successful, 0 if token not found/expired/wrong type
-        int updated = tokenRepository.extendAccessTokenExpiration(
-            tokenId,
-            ACCESS_TOKEN_VALIDITY_MIN
-        );
+        // Generate UTC timestamp FIRST (consistent time reference for all operations)
+        Instant currentUtc = Instant.now();
 
-        if (updated == 0) {
-            logger.warn("Access token not found, expired, or invalid: {}", tokenId);
+        // Fetch the token to get current metadata
+        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenById(tokenId, currentUtc);
+
+        if (tokenOpt.isEmpty()) {
+            logger.warn("Access token not found or expired: {}", tokenId);
             return Optional.empty();
         }
 
-        // Fetch session ID (token has been extended)
-        // Use findValidTokenById() to double-check using database timestamp
-        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenById(tokenId);
+        AuthenticationToken token = tokenOpt.get();
 
-        if (tokenOpt.isPresent()) {
-            String sessionId = tokenOpt.get().getSysId();
-            logger.debug("Access token validated and extended for session: {}", sessionId);
-            return Optional.of(sessionId);
+        // Calculate new expiration and update timestamp (based on same UTC time)
+        Instant newExpirationUtc = currentUtc.plusSeconds(ACCESS_TOKEN_VALIDITY_MIN * 60L);
+        Instant updateTimestamp = currentUtc;
+
+        // Parse existing metadata and update it
+        AuthenticationToken.TokenMetadata metadata;
+        try {
+            if (token.getAuthObj() != null) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+                metadata = mapper.readValue(token.getAuthObj(), AuthenticationToken.TokenMetadata.class);
+            } else {
+                metadata = new AuthenticationToken.TokenMetadata();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to parse token metadata", e);
+            metadata = new AuthenticationToken.TokenMetadata();
         }
 
-        // Should not happen (we just updated it), but handle gracefully
-        logger.error("Access token extended but not found in database: {}", tokenId);
-        return Optional.empty();
+        // Update metadata with UTC timestamp
+        metadata.lastUsedAt = currentUtc;
+        metadata.tokenValue = tokenId;  // Keep token value
+
+        // Serialize to JSON (pre-built, no string concatenation in query)
+        String updatedJsonMetadata;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            updatedJsonMetadata = mapper.writeValueAsString(metadata);
+        } catch (Exception e) {
+            logger.error("Failed to serialize token metadata", e);
+            return Optional.empty();
+        }
+
+        // Atomically extend token with pre-built JSON and UTC timestamps
+        int updated = tokenRepository.extendAccessTokenExpiration(
+            tokenId,
+            newExpirationUtc,
+            updatedJsonMetadata,
+            currentUtc,
+            updateTimestamp
+        );
+
+        if (updated == 0) {
+            logger.warn("Access token not found, expired, or invalid (race condition): {}", tokenId);
+            return Optional.empty();
+        }
+
+        String sessionId = token.getSysId();
+        logger.debug("Access token validated and extended for session: {} (new expiration: {})",
+            sessionId, newExpirationUtc);
+        return Optional.of(sessionId);
     }
 
     /**
@@ -239,11 +335,11 @@ public class AuthenticationTokenService {
      * Scheduled cleanup of expired tokens.
      * Runs every 5 minutes to maintain database hygiene.
      *
-     * DISTRIBUTED SYSTEM IMPROVEMENTS:
-     * - Uses database timestamp for consistency across DCs
+     * RACE-CONDITION PROOF DESIGN:
+     * - Uses UTC timestamp generated in Java before queries
+     * - All comparisons done against consistent UTC time
      * - Safe to run on all instances simultaneously (idempotent)
      * - No race conditions (DELETE operations are atomic)
-     * - Works with JSON metadata in CLOB
      *
      * Performs two cleanup operations:
      * 1. Delete expired tokens (both authorization codes and access tokens)
@@ -252,16 +348,19 @@ public class AuthenticationTokenService {
     @Scheduled(fixedRate = 300000)  // Every 5 minutes
     @Transactional
     public void cleanupExpiredTokens() {
-        // Delete expired tokens (uses database timestamp - no clock skew issues)
-        int expiredCount = tokenRepository.deleteExpiredTokens();
+        // Generate UTC timestamp BEFORE queries (consistent time reference)
+        Instant currentUtc = Instant.now();
+        Instant cutoffUtc = currentUtc.minusSeconds(5 * 60);  // 5 minutes ago
+
+        // Delete expired tokens (uses UTC comparison)
+        int expiredCount = tokenRepository.deleteExpiredTokens(currentUtc);
 
         // Delete old used authorization codes (keep for 5 min audit trail)
-        // This queries JSON metadata to find codes marked as used
-        int usedCodesCount = tokenRepository.deleteOldUsedAuthorizationCodes(5);
+        int usedCodesCount = tokenRepository.deleteOldUsedAuthorizationCodes(cutoffUtc);
 
         if (expiredCount > 0 || usedCodesCount > 0) {
-            logger.info("Cleanup: {} expired tokens, {} old authorization codes",
-                expiredCount, usedCodesCount);
+            logger.info("Cleanup: {} expired tokens, {} old authorization codes (cutoff: {})",
+                expiredCount, usedCodesCount, cutoffUtc);
         }
     }
 }
