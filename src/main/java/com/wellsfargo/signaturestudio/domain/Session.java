@@ -11,6 +11,8 @@ public class Session {
     private Instant createdAt;
     private Instant expiresAt;
     private List<AccountWithRole> accountsWithRoles;
+    private String csrfToken;
+    private String csrfHeaderName;
     
     // Getters and Setters
     public String getSessionId() {
@@ -67,6 +69,22 @@ public class Session {
     
     public void setAccountsWithRoles(List<AccountWithRole> accountsWithRoles) {
         this.accountsWithRoles = accountsWithRoles;
+    }
+    
+    public String getCsrfToken() {
+        return csrfToken;
+    }
+    
+    public void setCsrfToken(String csrfToken) {
+        this.csrfToken = csrfToken;
+    }
+    
+    public String getCsrfHeaderName() {
+        return csrfHeaderName;
+    }
+    
+    public void setCsrfHeaderName(String csrfHeaderName) {
+        this.csrfHeaderName = csrfHeaderName;
     }
 }
 

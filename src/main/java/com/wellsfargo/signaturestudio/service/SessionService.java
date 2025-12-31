@@ -4,9 +4,11 @@ import com.wellsfargo.signaturestudio.constants.SessionConstants;
 import com.wellsfargo.signaturestudio.domain.AccountWithRole;
 import com.wellsfargo.signaturestudio.domain.Session;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -33,6 +35,12 @@ import java.util.List;
 public class SessionService {
     
     private static final Logger auditLogger = LoggerFactory.getLogger("SECURITY_AUDIT");
+    
+    private final CsrfTokenService csrfTokenService;
+    
+    public SessionService(CsrfTokenService csrfTokenService) {
+        this.csrfTokenService = csrfTokenService;
+    }
     
     /**
      * Gets current session information as DTO.
@@ -67,6 +75,28 @@ public class SessionService {
         // Include accounts with roles from session
         List<AccountWithRole> accountsWithRoles = getAccountsWithRoles(session);
         sessionDTO.setAccountsWithRoles(accountsWithRoles);
+        
+        // Include CSRF token if available
+        try {
+            ServletRequestAttributes attributes = 
+                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attributes != null) {
+                HttpServletRequest request = attributes.getRequest();
+                HttpServletResponse response = attributes.getResponse();
+                if (request != null && response != null) {
+                    CsrfToken csrfToken = csrfTokenService.getOrGenerateToken(request, response);
+                    if (csrfToken != null) {
+                        sessionDTO.setCsrfToken(csrfToken.getToken());
+                        sessionDTO.setCsrfHeaderName(csrfToken.getHeaderName());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // If CSRF token cannot be retrieved, continue without it
+            // Frontend can call /api/auth/csrf-token separately if needed
+            LoggerFactory.getLogger(SessionService.class)
+                .debug("Could not retrieve CSRF token for session: {}", e.getMessage());
+        }
         
         // Calculate times
         Long loginTime = (Long) session.getAttribute(SessionConstants.LOGIN_TIME);

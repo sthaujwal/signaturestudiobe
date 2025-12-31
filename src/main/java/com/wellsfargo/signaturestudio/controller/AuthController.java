@@ -7,8 +7,10 @@ import com.wellsfargo.signaturestudio.domain.Session;
 import com.wellsfargo.signaturestudio.constants.SessionConstants;
 import com.wellsfargo.signaturestudio.service.AccountService;
 import com.wellsfargo.signaturestudio.service.AuthenticationService;
+import com.wellsfargo.signaturestudio.service.CsrfTokenService;
 import com.wellsfargo.signaturestudio.service.SessionService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,13 +31,16 @@ public class AuthController {
     private final AuthenticationService authenticationService;
     private final SessionService sessionService;
     private final AccountService accountService;
+    private final CsrfTokenService csrfTokenService;
     
     public AuthController(AuthenticationService authenticationService, 
                          SessionService sessionService,
-                         AccountService accountService) {
+                         AccountService accountService,
+                         CsrfTokenService csrfTokenService) {
         this.authenticationService = authenticationService;
         this.sessionService = sessionService;
         this.accountService = accountService;
+        this.csrfTokenService = csrfTokenService;
     }
     
     /**
@@ -116,6 +121,8 @@ public class AuthController {
     @PostMapping("/authenticated")
     public ResponseEntity<List<AccountWithRole>> authenticated(
             @Valid @RequestBody AuthUser authUser,
+            HttpServletRequest request,
+            HttpServletResponse response,
             HttpSession session) {
         List<AccountWithRole> accountsWithRoles = accountService.getAccountsWithRoles(authUser);
         
@@ -130,7 +137,11 @@ public class AuthController {
                 authUser.getUserId(), defaultAccount.getAccountId());
         }
         
-        logger.info("Stored {} accounts with roles in session for user: {}", 
+        // Ensure CSRF token is generated and available
+        // This ensures the token is created when session attributes are first set
+        csrfTokenService.getOrGenerateToken(request, response);
+        
+        logger.info("Stored {} accounts with roles in session for user: {} | CSRF token generated", 
             accountsWithRoles.size(), authUser.getUserId());
         
         return ResponseEntity.ok(accountsWithRoles);
