@@ -80,30 +80,37 @@ public class AuthenticationTokenService {
 
     /**
      * Internal method to generate token with JSON metadata in CLOB.
+     * Returns the token ID (authentication_token_id), which is used as the token value.
+     * This provides optimal performance using primary key lookups.
      */
     private String generateToken(String sessionId, TokenType tokenType, int lengthBytes, int validityMinutes) {
-        // Generate cryptographically secure random token
+        // Generate UUID as token ID (this becomes the token value for optimal lookups)
+        String tokenId = UUID.randomUUID().toString();
+
+        // Generate additional random data for JSON metadata (optional, for extra security)
         byte[] randomBytes = new byte[lengthBytes];
         secureRandom.nextBytes(randomBytes);
-        String tokenValue = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+        String additionalEntropy = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
 
         // Create token entity with JSON metadata
         AuthenticationToken token = new AuthenticationToken();
-        token.setAuthenticationTokenId(UUID.randomUUID().toString());
+        token.setAuthenticationTokenId(tokenId);
         token.setTokenType(tokenType);
         token.setSysId(sessionId);
         token.setExpirProdInMin(validityMinutes);
         token.setNextExpirTmstp(Instant.now().plusSeconds(validityMinutes * 60L));
 
         // Set token value in metadata (will be serialized to JSON in auth_obj CLOB)
-        token.setTokenValue(tokenValue);
+        // Store the tokenId as tokenValue for consistency
+        token.setTokenValue(tokenId);
 
         tokenRepository.save(token);
 
-        logger.info("Generated {} for session: {} (expires in {} minutes)",
-            tokenType, sessionId, validityMinutes);
+        logger.info("Generated {} (ID: {}) for session: {} (expires in {} minutes)",
+            tokenType, tokenId, sessionId, validityMinutes);
 
-        return tokenValue;
+        // Return the token ID - this is what frontend will use in headers
+        return tokenId;
     }
 
     /**
@@ -115,6 +122,7 @@ public class AuthenticationTokenService {
      * - Uses database timestamp for expiration check (eliminates clock skew)
      * - Prevents race conditions across multiple data centers
      * - Single database round-trip for better performance
+     * - Uses primary key lookup for optimal performance
      *
      * Security features:
      * - One-time use (marks as consumed atomically in JSON metadata)
@@ -122,22 +130,22 @@ public class AuthenticationTokenService {
      * - Checks expiration using Oracle's clock
      * - Returns session ID for token generation
      *
-     * @param codeValue The authorization code to validate
+     * @param tokenId The authorization code ID (authentication_token_id) to validate
      * @return Optional containing session ID if valid, empty otherwise
      */
     @Transactional
-    public Optional<String> validateAndConsumeAuthorizationCode(String codeValue) {
+    public Optional<String> validateAndConsumeAuthorizationCode(String tokenId) {
         // Atomically mark code as used in JSON metadata (prevents race conditions across DCs)
         // Returns 1 if successful, 0 if already used/expired/not found
-        int updated = tokenRepository.markAuthorizationCodeAsUsed(codeValue);
+        int updated = tokenRepository.markAuthorizationCodeAsUsed(tokenId);
 
         if (updated == 0) {
-            logger.warn("Authorization code invalid, already used, or expired");
+            logger.warn("Authorization code invalid, already used, or expired: {}", tokenId);
             return Optional.empty();
         }
 
         // Fetch session ID (code is now marked as used in JSON)
-        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenByValue(codeValue);
+        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenById(tokenId);
 
         if (tokenOpt.isPresent()) {
             String sessionId = tokenOpt.get().getSysId();
@@ -146,7 +154,7 @@ public class AuthenticationTokenService {
         }
 
         // Should not happen (we just updated it), but handle gracefully
-        logger.error("Authorization code marked as used but not found in database: {}", codeValue);
+        logger.error("Authorization code marked as used but not found in database: {}", tokenId);
         return Optional.empty();
     }
 
@@ -160,32 +168,33 @@ public class AuthenticationTokenService {
      * - Prevents race conditions across multiple data centers
      * - Single database UPDATE for better performance
      * - Updates lastUsedAt in JSON metadata for audit trail
+     * - Uses primary key lookup for optimal performance
      *
      * This is the KEY method for auto-refresh functionality:
      * - Every valid API request automatically extends the token expiration
      * - Synchronizes with session expiration
      * - Updates lastUsedAt in JSON for audit trail
      *
-     * @param tokenValue The access token to validate
+     * @param tokenId The access token ID (authentication_token_id) to validate
      * @return Optional containing session ID if valid, empty otherwise
      */
     @Transactional
-    public Optional<String> validateAndExtendAccessToken(String tokenValue) {
+    public Optional<String> validateAndExtendAccessToken(String tokenId) {
         // Atomically extend token expiration and update JSON metadata (prevents race conditions across DCs)
         // Returns 1 if successful, 0 if token not found/expired/wrong type
         int updated = tokenRepository.extendAccessTokenExpiration(
-            tokenValue,
+            tokenId,
             ACCESS_TOKEN_VALIDITY_MIN
         );
 
         if (updated == 0) {
-            logger.warn("Access token not found, expired, or invalid");
+            logger.warn("Access token not found, expired, or invalid: {}", tokenId);
             return Optional.empty();
         }
 
         // Fetch session ID (token has been extended)
-        // Use findValidTokenByValue() to double-check using database timestamp
-        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenByValue(tokenValue);
+        // Use findValidTokenById() to double-check using database timestamp
+        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenById(tokenId);
 
         if (tokenOpt.isPresent()) {
             String sessionId = tokenOpt.get().getSysId();
@@ -194,7 +203,7 @@ public class AuthenticationTokenService {
         }
 
         // Should not happen (we just updated it), but handle gracefully
-        logger.error("Access token extended but not found in database: {}", tokenValue);
+        logger.error("Access token extended but not found in database: {}", tokenId);
         return Optional.empty();
     }
 

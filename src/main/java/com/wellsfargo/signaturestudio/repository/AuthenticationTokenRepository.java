@@ -24,22 +24,22 @@ import java.util.Optional;
 public interface AuthenticationTokenRepository extends JpaRepository<AuthenticationToken, String> {
 
     /**
-     * Find valid (non-expired) token where JSON contains the specified token value.
-     * Uses JSON_VALUE to extract tokenValue from the CLOB and check expiration atomically.
+     * Find valid (non-expired) token by authentication_token_id (primary key).
+     * Uses primary key lookup for optimal performance.
      *
      * DISTRIBUTED SYSTEM: Safe across multiple data centers - uses Oracle's clock.
      *
      * Query explanation:
-     * - JSON_VALUE(auth_obj, '$.tokenValue') extracts tokenValue from JSON in CLOB
+     * - Uses primary key index for fast lookup
      * - Checks expiration using SYSTIMESTAMP (database clock)
      * - Returns entity if token is valid and not expired
      */
     @Query(value =
-        "SELECT * FROM AUTHENTICATION_TOKENS " +
-        "WHERE JSON_VALUE(auth_obj, '$.tokenValue') = :tokenValue " +
+        "SELECT * FROM AUTHENTICATION_TOKEN " +
+        "WHERE authentication_token_id = :tokenId " +
         "  AND next_expir_tmstp > SYSTIMESTAMP",
         nativeQuery = true)
-    Optional<AuthenticationToken> findValidTokenByValue(@Param("tokenValue") String tokenValue);
+    Optional<AuthenticationToken> findValidTokenById(@Param("tokenId") String tokenId);
 
     /**
      * Find all tokens for a session (used for revocation).
@@ -64,26 +64,26 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
      * - Updates JSON metadata to record last usage time
      *
      * Query explanation:
-     * - JSON_VALUE extracts tokenValue from CLOB for matching
+     * - Uses primary key for fast lookup
      * - JSON_TRANSFORM updates 'lastUsedAt' field in JSON without replacing entire CLOB
      * - SYSTIMESTAMP ensures consistent timing across all data centers
      *
-     * @param tokenValue Token value to extend
+     * @param tokenId Token ID (authentication_token_id) to extend
      * @param validityMinutes How many minutes to extend (e.g., 30)
      * @return Number of rows updated (1 = success, 0 = not found/expired)
      */
     @Modifying
     @Query(value =
-        "UPDATE AUTHENTICATION_TOKENS " +
+        "UPDATE AUTHENTICATION_TOKEN " +
         "SET next_expir_tmstp = SYSTIMESTAMP + NUMTODSINTERVAL(:validityMinutes, 'MINUTE'), " +
         "    auth_obj = JSON_TRANSFORM(auth_obj, SET '$.lastUsedAt' = TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')), " +
         "    row_lst_updt_tmstp = SYSTIMESTAMP " +
-        "WHERE JSON_VALUE(auth_obj, '$.tokenValue') = :tokenValue " +
+        "WHERE authentication_token_id = :tokenId " +
         "  AND token_type = 'ACCESS_TOKEN' " +
         "  AND next_expir_tmstp > SYSTIMESTAMP",
         nativeQuery = true)
     int extendAccessTokenExpiration(
-        @Param("tokenValue") String tokenValue,
+        @Param("tokenId") String tokenId,
         @Param("validityMinutes") int validityMinutes
     );
 
@@ -98,27 +98,27 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
      * - Updates JSON metadata to set 'used' = true and 'usedAt' timestamp
      *
      * Query explanation:
-     * - JSON_VALUE extracts tokenValue for matching
+     * - Uses primary key for fast lookup
      * - JSON_VALUE checks if 'used' is false (authorization code not yet consumed)
      * - JSON_TRANSFORM updates both 'used' and 'usedAt' fields in single operation
      * - SYSTIMESTAMP ensures consistent timing across all data centers
      *
-     * @param tokenValue Authorization code value
+     * @param tokenId Authorization code ID (authentication_token_id)
      * @return Number of rows updated (1 = success, 0 = already used/expired)
      */
     @Modifying
     @Query(value =
-        "UPDATE AUTHENTICATION_TOKENS " +
+        "UPDATE AUTHENTICATION_TOKEN " +
         "SET auth_obj = JSON_TRANSFORM(auth_obj, " +
         "       SET '$.used' = 'true', " +
         "       SET '$.usedAt' = TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"')), " +
         "    row_lst_updt_tmstp = SYSTIMESTAMP " +
-        "WHERE JSON_VALUE(auth_obj, '$.tokenValue') = :tokenValue " +
+        "WHERE authentication_token_id = :tokenId " +
         "  AND token_type = 'AUTHORIZATION_CODE' " +
         "  AND (JSON_VALUE(auth_obj, '$.used') = 'false' OR JSON_VALUE(auth_obj, '$.used') IS NULL) " +
         "  AND next_expir_tmstp > SYSTIMESTAMP",
         nativeQuery = true)
-    int markAuthorizationCodeAsUsed(@Param("tokenValue") String tokenValue);
+    int markAuthorizationCodeAsUsed(@Param("tokenId") String tokenId);
 
     /**
      * Delete all tokens for a session (on logout).
@@ -136,7 +136,7 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
      */
     @Modifying
     @Query(value =
-        "DELETE FROM AUTHENTICATION_TOKENS " +
+        "DELETE FROM AUTHENTICATION_TOKEN " +
         "WHERE next_expir_tmstp < SYSTIMESTAMP",
         nativeQuery = true)
     int deleteExpiredTokens();
@@ -157,7 +157,7 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
      */
     @Modifying
     @Query(value =
-        "DELETE FROM AUTHENTICATION_TOKENS " +
+        "DELETE FROM AUTHENTICATION_TOKEN " +
         "WHERE token_type = 'AUTHORIZATION_CODE' " +
         "  AND JSON_VALUE(auth_obj, '$.used') = 'true' " +
         "  AND TO_TIMESTAMP(JSON_VALUE(auth_obj, '$.usedAt'), 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"') < SYSTIMESTAMP - NUMTODSINTERVAL(:retentionMinutes, 'MINUTE')",
