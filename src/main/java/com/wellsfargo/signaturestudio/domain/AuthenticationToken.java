@@ -1,6 +1,13 @@
 package com.wellsfargo.signaturestudio.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.persistence.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Instant;
 
 /**
@@ -11,6 +18,15 @@ import java.time.Instant;
  * - AUTHORIZATION_CODE: Short-lived (60s), one-time use, exchanged for ACCESS_TOKEN
  * - ACCESS_TOKEN: Long-lived (30min), reusable, auto-extends on activity
  *
+ * CLOB Storage:
+ * The auth_obj column is a CLOB field containing JSON metadata:
+ * {
+ *   "tokenValue": "abc123xyz...",
+ *   "used": false,
+ *   "usedAt": null,
+ *   "lastUsedAt": null
+ * }
+ *
  * Flow:
  * 1. After Ping IdP auth → Generate AUTHORIZATION_CODE → Redirect to frontend
  * 2. Frontend exchanges code → Generate ACCESS_TOKEN
@@ -18,12 +34,15 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "AUTHENTICATION_TOKENS", indexes = {
-    @Index(name = "idx_auth_obj", columnList = "auth_obj", unique = true),
     @Index(name = "idx_sys_id", columnList = "sys_id"),
     @Index(name = "idx_token_type", columnList = "token_type"),
     @Index(name = "idx_expiration", columnList = "next_expir_tmstp")
 })
 public class AuthenticationToken {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthenticationToken.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+        .registerModule(new JavaTimeModule());
 
     @Id
     @Column(name = "authentication_token_id", length = 64)
@@ -33,8 +52,20 @@ public class AuthenticationToken {
     @Column(name = "token_type", nullable = false, length = 20)
     private TokenType tokenType;
 
-    @Column(name = "auth_obj", nullable = false, unique = true, length = 128)
+    /**
+     * CLOB field containing JSON metadata.
+     * Structure: { "tokenValue": "...", "used": false, "usedAt": null, "lastUsedAt": null }
+     */
+    @Lob
+    @Column(name = "auth_obj", nullable = false)
     private String authObj;
+
+    /**
+     * Transient field to hold parsed metadata from authObj CLOB.
+     * Not stored in database - derived from authObj JSON.
+     */
+    @Transient
+    private TokenMetadata metadata;
 
     @Column(name = "sys_id", nullable = false, length = 255)
     private String sysId;  // Session ID reference
@@ -44,12 +75,6 @@ public class AuthenticationToken {
 
     @Column(name = "next_expir_tmstp", nullable = false)
     private Instant nextExpirTmstp;
-
-    @Column(name = "last_used_tmstp")
-    private Instant lastUsedTmstp;
-
-    @Column(name = "used_at")
-    private Instant usedAt;  // For AUTHORIZATION_CODE only
 
     @Column(name = "row_crte_tmstp", nullable = false, updatable = false)
     private Instant rowCrteTmstp;
@@ -70,6 +95,38 @@ public class AuthenticationToken {
     }
 
     /**
+     * Parse JSON from authObj CLOB after loading from database.
+     */
+    @PostLoad
+    protected void parseMetadata() {
+        if (authObj != null) {
+            try {
+                this.metadata = objectMapper.readValue(authObj, TokenMetadata.class);
+            } catch (JsonProcessingException e) {
+                logger.error("Failed to parse token metadata from authObj CLOB", e);
+                this.metadata = new TokenMetadata();
+            }
+        }
+    }
+
+    /**
+     * Get token value from metadata.
+     */
+    public String getTokenValue() {
+        ensureMetadataLoaded();
+        return metadata != null ? metadata.tokenValue : null;
+    }
+
+    /**
+     * Set token value in metadata and update CLOB.
+     */
+    public void setTokenValue(String tokenValue) {
+        ensureMetadataLoaded();
+        metadata.tokenValue = tokenValue;
+        updateAuthObjFromMetadata();
+    }
+
+    /**
      * Check if token is expired.
      */
     public boolean isExpired() {
@@ -80,7 +137,8 @@ public class AuthenticationToken {
      * Check if authorization code has been used (one-time use check).
      */
     public boolean isUsed() {
-        return tokenType == TokenType.AUTHORIZATION_CODE && usedAt != null;
+        ensureMetadataLoaded();
+        return tokenType == TokenType.AUTHORIZATION_CODE && metadata != null && metadata.used;
     }
 
     /**
@@ -88,17 +146,46 @@ public class AuthenticationToken {
      */
     public void markAsUsed() {
         if (tokenType == TokenType.AUTHORIZATION_CODE) {
-            this.usedAt = Instant.now();
+            ensureMetadataLoaded();
+            metadata.used = true;
+            metadata.usedAt = Instant.now();
+            updateAuthObjFromMetadata();
         }
     }
 
     /**
      * Extend token expiration (for ACCESS_TOKEN auto-refresh).
      */
-    public void extendExpiration() {
+    public void extendExpiration(int validityMinutes) {
         if (tokenType == TokenType.ACCESS_TOKEN) {
-            this.nextExpirTmstp = Instant.now().plusSeconds(expirProdInMin * 60L);
-            this.lastUsedTmstp = Instant.now();
+            this.nextExpirTmstp = Instant.now().plusSeconds(validityMinutes * 60L);
+            ensureMetadataLoaded();
+            metadata.lastUsedAt = Instant.now();
+            updateAuthObjFromMetadata();
+        }
+    }
+
+    /**
+     * Ensure metadata is loaded from authObj CLOB.
+     */
+    private void ensureMetadataLoaded() {
+        if (metadata == null) {
+            if (authObj != null) {
+                parseMetadata();
+            } else {
+                metadata = new TokenMetadata();
+            }
+        }
+    }
+
+    /**
+     * Update authObj CLOB from metadata object.
+     */
+    private void updateAuthObjFromMetadata() {
+        try {
+            this.authObj = objectMapper.writeValueAsString(metadata);
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to serialize token metadata to JSON", e);
         }
     }
 
@@ -151,22 +238,6 @@ public class AuthenticationToken {
         this.nextExpirTmstp = nextExpirTmstp;
     }
 
-    public Instant getLastUsedTmstp() {
-        return lastUsedTmstp;
-    }
-
-    public void setLastUsedTmstp(Instant lastUsedTmstp) {
-        this.lastUsedTmstp = lastUsedTmstp;
-    }
-
-    public Instant getUsedAt() {
-        return usedAt;
-    }
-
-    public void setUsedAt(Instant usedAt) {
-        this.usedAt = usedAt;
-    }
-
     public Instant getRowCrteTmstp() {
         return rowCrteTmstp;
     }
@@ -198,5 +269,42 @@ public class AuthenticationToken {
          * Used in X-SignatureStudio-Token header for API calls.
          */
         ACCESS_TOKEN
+    }
+
+    /**
+     * JSON metadata stored in auth_obj CLOB.
+     * Stores token value and usage tracking information.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class TokenMetadata {
+        /**
+         * The actual token value (random Base64 string).
+         */
+        public String tokenValue;
+
+        /**
+         * Whether authorization code has been used (one-time use tracking).
+         * Only applicable for AUTHORIZATION_CODE type.
+         */
+        public boolean used = false;
+
+        /**
+         * Timestamp when authorization code was consumed.
+         * Only applicable for AUTHORIZATION_CODE type.
+         */
+        public Instant usedAt;
+
+        /**
+         * Last time this access token was used in an API request.
+         * Only applicable for ACCESS_TOKEN type.
+         */
+        public Instant lastUsedAt;
+
+        public TokenMetadata() {
+        }
+
+        public TokenMetadata(String tokenValue) {
+            this.tokenValue = tokenValue;
+        }
     }
 }

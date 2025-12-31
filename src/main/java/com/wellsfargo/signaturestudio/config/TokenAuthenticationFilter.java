@@ -60,14 +60,26 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
         if (tokenValue != null && !tokenValue.isEmpty()) {
             // Validate and extend ACCESS_TOKEN (automatic extension!)
-            Optional<String> sessionIdOpt = tokenService.validateAndExtendAccessToken(tokenValue);
+            Optional<String> tokenSessionIdOpt = tokenService.validateAndExtendAccessToken(tokenValue);
 
-            if (sessionIdOpt.isPresent()) {
-                String sessionId = sessionIdOpt.get();
+            if (tokenSessionIdOpt.isPresent()) {
+                String tokenSessionId = tokenSessionIdOpt.get();
+
+                // SECURITY: Verify token belongs to current session (prevents session fixation/token theft)
+                String currentSessionId = request.getSession(false) != null ? request.getSession(false).getId() : null;
+
+                if (currentSessionId != null && !tokenSessionId.equals(currentSessionId)) {
+                    logger.warn("SECURITY: Token session mismatch! Token sessionId: {}, Current sessionId: {}. Possible token theft or session fixation attack.",
+                        tokenSessionId, currentSessionId);
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\": \"Invalid or expired token\"}");
+                    return;
+                }
 
                 // Load and touch session (extends session expiration)
                 if (sessionRepository != null) {
-                    Session session = sessionRepository.findById(sessionId);
+                    Session session = sessionRepository.findById(tokenSessionId);
 
                     if (session != null && !session.isExpired()) {
                         // CRITICAL: Touch session to extend its expiration
@@ -80,15 +92,15 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
                         repo.save(session);
 
                         // Make session ID available to controllers
-                        request.setAttribute("AUTHENTICATED_SESSION_ID", sessionId);
+                        request.setAttribute("AUTHENTICATED_SESSION_ID", tokenSessionId);
 
-                        logger.debug("Token validated and session extended: {}", sessionId);
+                        logger.debug("Token validated, session matched, and session extended: {}", tokenSessionId);
 
                         // Continue filter chain
                         filterChain.doFilter(request, response);
                         return;
                     } else {
-                        logger.warn("Token valid but session not found or expired: {}", sessionId);
+                        logger.warn("Token valid but session not found or expired: {}", tokenSessionId);
                     }
                 } else {
                     logger.warn("Session repository not available, cannot validate session");

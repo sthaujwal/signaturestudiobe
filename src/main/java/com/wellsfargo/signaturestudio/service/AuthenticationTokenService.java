@@ -17,7 +17,7 @@ import java.util.UUID;
 
 /**
  * Unified service for managing both authorization codes and access tokens.
- * Uses a single table with token_type discrimination.
+ * Uses a single table with token_type discrimination and JSON metadata in CLOB.
  *
  * Authorization Code Flow:
  * 1. generateAuthorizationCode() - Create short-lived code after Ping IdP auth
@@ -79,7 +79,7 @@ public class AuthenticationTokenService {
     }
 
     /**
-     * Internal method to generate token.
+     * Internal method to generate token with JSON metadata in CLOB.
      */
     private String generateToken(String sessionId, TokenType tokenType, int lengthBytes, int validityMinutes) {
         // Generate cryptographically secure random token
@@ -87,14 +87,16 @@ public class AuthenticationTokenService {
         secureRandom.nextBytes(randomBytes);
         String tokenValue = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
 
-        // Create token entity
+        // Create token entity with JSON metadata
         AuthenticationToken token = new AuthenticationToken();
         token.setAuthenticationTokenId(UUID.randomUUID().toString());
         token.setTokenType(tokenType);
-        token.setAuthObj(tokenValue);
         token.setSysId(sessionId);
         token.setExpirProdInMin(validityMinutes);
         token.setNextExpirTmstp(Instant.now().plusSeconds(validityMinutes * 60L));
+
+        // Set token value in metadata (will be serialized to JSON in auth_obj CLOB)
+        token.setTokenValue(tokenValue);
 
         tokenRepository.save(token);
 
@@ -109,13 +111,13 @@ public class AuthenticationTokenService {
      * Returns session ID if valid, empty if invalid/expired/already used.
      *
      * DISTRIBUTED SYSTEM IMPROVEMENTS:
-     * - Uses atomic database operation to mark code as used
+     * - Uses atomic database operation with JSON_TRANSFORM to mark code as used
      * - Uses database timestamp for expiration check (eliminates clock skew)
      * - Prevents race conditions across multiple data centers
      * - Single database round-trip for better performance
      *
      * Security features:
-     * - One-time use (marks as consumed atomically)
+     * - One-time use (marks as consumed atomically in JSON metadata)
      * - Prevents replay attacks across DCs
      * - Checks expiration using Oracle's clock
      * - Returns session ID for token generation
@@ -125,7 +127,7 @@ public class AuthenticationTokenService {
      */
     @Transactional
     public Optional<String> validateAndConsumeAuthorizationCode(String codeValue) {
-        // Atomically mark code as used (prevents race conditions across DCs)
+        // Atomically mark code as used in JSON metadata (prevents race conditions across DCs)
         // Returns 1 if successful, 0 if already used/expired/not found
         int updated = tokenRepository.markAuthorizationCodeAsUsed(codeValue);
 
@@ -134,8 +136,8 @@ public class AuthenticationTokenService {
             return Optional.empty();
         }
 
-        // Fetch session ID (code is now marked as used)
-        Optional<AuthenticationToken> tokenOpt = tokenRepository.findByAuthObj(codeValue);
+        // Fetch session ID (code is now marked as used in JSON)
+        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenByValue(codeValue);
 
         if (tokenOpt.isPresent()) {
             String sessionId = tokenOpt.get().getSysId();
@@ -153,22 +155,23 @@ public class AuthenticationTokenService {
      * Returns session ID if valid, empty if invalid/expired.
      *
      * DISTRIBUTED SYSTEM IMPROVEMENTS:
-     * - Uses atomic database operation to extend token
+     * - Uses atomic database operation with JSON_TRANSFORM to extend token
      * - Uses database timestamp for expiration (eliminates clock skew)
      * - Prevents race conditions across multiple data centers
      * - Single database UPDATE for better performance
+     * - Updates lastUsedAt in JSON metadata for audit trail
      *
      * This is the KEY method for auto-refresh functionality:
      * - Every valid API request automatically extends the token expiration
      * - Synchronizes with session expiration
-     * - Updates last_used_tmstp for audit trail
+     * - Updates lastUsedAt in JSON for audit trail
      *
      * @param tokenValue The access token to validate
      * @return Optional containing session ID if valid, empty otherwise
      */
     @Transactional
     public Optional<String> validateAndExtendAccessToken(String tokenValue) {
-        // Atomically extend token expiration (prevents race conditions across DCs)
+        // Atomically extend token expiration and update JSON metadata (prevents race conditions across DCs)
         // Returns 1 if successful, 0 if token not found/expired/wrong type
         int updated = tokenRepository.extendAccessTokenExpiration(
             tokenValue,
@@ -181,8 +184,8 @@ public class AuthenticationTokenService {
         }
 
         // Fetch session ID (token has been extended)
-        // Use findValidToken() to double-check using database timestamp
-        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidToken(tokenValue);
+        // Use findValidTokenByValue() to double-check using database timestamp
+        Optional<AuthenticationToken> tokenOpt = tokenRepository.findValidTokenByValue(tokenValue);
 
         if (tokenOpt.isPresent()) {
             String sessionId = tokenOpt.get().getSysId();
@@ -199,15 +202,27 @@ public class AuthenticationTokenService {
      * Revoke all tokens for a session (on logout).
      * Removes both authorization codes and access tokens.
      *
-     * Called by SessionEventListener when session is destroyed.
+     * DISTRIBUTED SYSTEM: Safe for concurrent calls from multiple DCs.
+     * - DELETE operation is idempotent (safe to call multiple times)
+     * - If tokens already deleted, returns 0 (no error)
+     * - Foreign key CASCADE ensures cleanup even if listener doesn't fire
+     *
+     * Called by:
+     * - SessionEventListener when session is destroyed
+     * - Explicit logout endpoint
+     * - Database CASCADE when session deleted
      *
      * @param sessionId The session ID whose tokens should be revoked
      */
     @Transactional
     public void revokeTokensForSession(String sessionId) {
         int deleted = tokenRepository.deleteBySysId(sessionId);
+
         if (deleted > 0) {
             logger.info("Revoked {} token(s) for session: {}", deleted, sessionId);
+        } else {
+            // Already revoked (by another DC or CASCADE) - this is normal in multi-DC
+            logger.debug("No tokens found for session (already revoked): {}", sessionId);
         }
     }
 
@@ -219,6 +234,7 @@ public class AuthenticationTokenService {
      * - Uses database timestamp for consistency across DCs
      * - Safe to run on all instances simultaneously (idempotent)
      * - No race conditions (DELETE operations are atomic)
+     * - Works with JSON metadata in CLOB
      *
      * Performs two cleanup operations:
      * 1. Delete expired tokens (both authorization codes and access tokens)
@@ -231,6 +247,7 @@ public class AuthenticationTokenService {
         int expiredCount = tokenRepository.deleteExpiredTokens();
 
         // Delete old used authorization codes (keep for 5 min audit trail)
+        // This queries JSON metadata to find codes marked as used
         int usedCodesCount = tokenRepository.deleteOldUsedAuthorizationCodes(5);
 
         if (expiredCount > 0 || usedCodesCount > 0) {
