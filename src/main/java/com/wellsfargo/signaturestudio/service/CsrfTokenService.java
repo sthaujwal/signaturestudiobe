@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.stereotype.Service;
@@ -29,12 +30,22 @@ public class CsrfTokenService {
     private static final Logger logger = LoggerFactory.getLogger(CsrfTokenService.class);
     
     /**
-     * CsrfTokenRepository is auto-injected by Spring if available.
+     * CsrfTokenRepository is injected via constructor if available.
      * Works with common library configurations that expose this bean.
      * If not available (common library doesn't expose it), will use request attribute method only.
      */
-    @Autowired(required = false)
-    private CsrfTokenRepository csrfTokenRepository;
+    private final CsrfTokenRepository csrfTokenRepository;
+    
+    /**
+     * Constructor injection with optional dependency.
+     * Uses @Nullable to indicate this is an optional dependency - Spring will inject null
+     * if CsrfTokenRepository is not available (e.g., common library doesn't expose it).
+     */
+    public CsrfTokenService(@Nullable CsrfTokenRepository csrfTokenRepository) {
+        this.csrfTokenRepository = csrfTokenRepository;
+        logger.debug("CsrfTokenService initialized with repository: {}", 
+            csrfTokenRepository != null ? csrfTokenRepository.getClass().getSimpleName() : "null");
+    }
     
     /**
      * Gets CSRF token from request attribute (populated by Spring Security filter).
