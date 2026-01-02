@@ -3,6 +3,7 @@ package com.wellsfargo.signaturestudio.service;
 import com.wellsfargo.signaturestudio.domain.AuthenticationToken;
 import com.wellsfargo.signaturestudio.domain.AuthenticationToken.TokenType;
 import com.wellsfargo.signaturestudio.repository.AuthenticationTokenRepository;
+import jakarta.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,24 +15,39 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Unified service for managing both authorization codes and access tokens.
- * Uses a single table with token_type discrimination and JSON metadata in CLOB.
+ * Authentication token service with hybrid approach:
  *
- * Authorization Code Flow:
- * 1. generateAuthorizationCode() - Create short-lived code after Ping IdP auth
- * 2. validateAndConsumeAuthorizationCode() - Exchange code for access token (one-time use)
- * 3. generateAccessToken() - Create long-lived token for API access
- * 4. validateAndExtendAccessToken() - Validate and auto-extend on each API call
- * 5. revokeTokensForSession() - Clean up on logout
+ * AUTHORIZATION CODES (Database):
+ * - Short-lived (60 seconds)
+ * - One-time use (deleted after consumption)
+ * - Stored in AUTHENTICATION_TOKEN table
+ * - Prevents replay attacks
+ *
+ * ACCESS TOKENS (Session Attributes):
+ * - Lives as long as session (no expiration)
+ * - Stored in SPRING_SESSION_ATTRIBUTES table
+ * - Auto-cleaned when session expires
+ * - No token refresh logic needed
+ * - Faster validation (indexed session lookup)
+ *
+ * Flow:
+ * 1. generateAuthorizationCode() - Create code in database
+ * 2. validateAndConsumeAuthorizationCode() - Validate & delete code
+ * 3. generateAccessTokenInSession() - Generate UUID, store in session attribute
+ * 4. validateAccessToken() - Check if token matches session attribute
+ * 5. Session expires - Spring auto-deletes session + attributes (token gone)
  */
 @Service
 public class AuthenticationTokenService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationTokenService.class);
 
+    // Session attribute key for access token
+    private static final String SESSION_ATTR_ACCESS_TOKEN = "ACCESS_TOKEN";
+    private static final String SESSION_ATTR_TOKEN_CREATED_AT = "TOKEN_CREATED_AT";
+
     // Configuration constants
     private static final int AUTHORIZATION_CODE_VALIDITY_MIN = 1;  // 1 minute
-    private static final int ACCESS_TOKEN_VALIDITY_MIN = 30;  // 30 minutes
 
     private final AuthenticationTokenRepository tokenRepository;
 
@@ -41,60 +57,27 @@ public class AuthenticationTokenService {
 
     /**
      * Generate short-lived authorization code (60 seconds, one-time use).
-     * Used in redirect URL after Ping IdP authentication.
+     * Stored in database for security and one-time validation.
      *
      * @param sessionId The session ID to associate with the code
      * @return The generated authorization code value
      */
     public String generateAuthorizationCode(String sessionId) {
-        return generateToken(
-            sessionId,
-            TokenType.AUTHORIZATION_CODE,
-            AUTHORIZATION_CODE_VALIDITY_MIN
-        );
-    }
-
-    /**
-     * Generate long-lived access token (30 minutes, reusable, auto-extends).
-     * Used in X-SignatureStudio-Token header for API calls.
-     *
-     * @param sessionId The session ID to associate with the token
-     * @return The generated access token value
-     */
-    public String generateAccessToken(String sessionId) {
-        return generateToken(
-            sessionId,
-            TokenType.ACCESS_TOKEN,
-            ACCESS_TOKEN_VALIDITY_MIN
-        );
-    }
-
-    /**
-     * Internal method to generate token.
-     * Returns the token ID (authentication_token_id), which is used as the token value.
-     * This provides optimal performance using primary key lookups.
-     *
-     * SIMPLIFIED: auth_obj just stores sessionId as plain string (no JSON).
-     */
-    private String generateToken(String sessionId, TokenType tokenType, int validityMinutes) {
-        // Generate UUID as token ID (this becomes the token value for optimal lookups)
+        // Generate UUID as token ID
         String tokenId = UUID.randomUUID().toString();
 
-        // Create token entity
+        // Create authorization code entity
         AuthenticationToken token = new AuthenticationToken();
         token.setAuthenticationTokenId(tokenId);
-        token.setTokenType(tokenType);
+        token.setTokenType(TokenType.AUTHORIZATION_CODE);
         token.setSysId(sessionId);
-        token.setAuthObj(sessionId);  // Store sessionId as plain string (no JSON!)
-        token.setExpirProdInMin(validityMinutes);
-        token.setNextExpirTmstp(Instant.now().plusSeconds(validityMinutes * 60L));
+        token.setAuthObj(sessionId);
+        token.setExpirProdInMin(AUTHORIZATION_CODE_VALIDITY_MIN);
+        token.setNextExpirTmstp(Instant.now().plusSeconds(AUTHORIZATION_CODE_VALIDITY_MIN * 60L));
 
         tokenRepository.save(token);
 
-        logger.info("Generated {} (ID: {}) for session: {} (expires in {} minutes)",
-            tokenType, tokenId, sessionId, validityMinutes);
-
-        // Return the token ID - this is what frontend will use in headers
+        logger.info("Generated authorization code for session: {} (expires in 1 minute)", sessionId);
         return tokenId;
     }
 
@@ -102,46 +85,34 @@ public class AuthenticationTokenService {
      * Validate and consume authorization code (ONE-TIME USE).
      * Returns session ID if valid, empty if invalid/expired.
      *
-     * SIMPLIFIED DESIGN:
-     * - Find valid authorization code
-     * - Delete it immediately (one-time use)
-     * - Return session ID for access token generation
+     * After successful validation:
+     * - Authorization code is deleted (one-time use)
+     * - Caller should generate access token and store in session
      *
-     * DISTRIBUTED SYSTEM:
-     * - DELETE is atomic and idempotent
-     * - If code already deleted, find returns empty (prevents replay)
-     * - Uses primary key lookup for optimal performance
-     *
-     * Security features:
-     * - One-time use (deleted after consumption)
-     * - Prevents replay attacks (code no longer exists after use)
-     * - UTC-based expiration check
-     *
-     * @param tokenId The authorization code ID (authentication_token_id) to validate
+     * @param codeId The authorization code ID to validate
      * @return Optional containing session ID if valid, empty otherwise
      */
     @Transactional
-    public Optional<String> validateAndConsumeAuthorizationCode(String tokenId) {
-        // Generate UTC timestamp FIRST (consistent time reference)
+    public Optional<String> validateAndConsumeAuthorizationCode(String codeId) {
         Instant currentUtc = Instant.now();
 
-        // Fetch valid token using Spring Data JPA method name (NO CAST needed!)
+        // Find valid authorization code
         Optional<AuthenticationToken> tokenOpt = tokenRepository
             .findByAuthenticationTokenIdAndTokenTypeAndNextExpirTmstpAfter(
-                tokenId,
+                codeId,
                 TokenType.AUTHORIZATION_CODE,
                 currentUtc
             );
 
         if (tokenOpt.isEmpty()) {
-            logger.warn("Authorization code not found or expired: {}", tokenId);
+            logger.warn("Authorization code not found or expired: {}", codeId);
             return Optional.empty();
         }
 
         AuthenticationToken token = tokenOpt.get();
         String sessionId = token.getSysId();
 
-        // Delete the authorization code (one-time use - simpler than marking as used!)
+        // Delete the authorization code (one-time use)
         tokenRepository.delete(token);
 
         logger.info("Authorization code consumed and deleted for session: {}", sessionId);
@@ -149,118 +120,110 @@ public class AuthenticationTokenService {
     }
 
     /**
-     * Validate access token and extend expiration (AUTO-REFRESH).
-     * Returns session ID if valid, empty if invalid/expired.
+     * Generate access token and store in session attribute.
      *
-     * RACE-CONDITION PROOF DESIGN:
-     * - Generates UTC timestamps in Java before query execution
-     * - Builds complete JSON metadata with timestamps
-     * - Single atomic UPDATE with optimistic locking
-     * - No time gap between timestamp generation and database update
+     * NEW APPROACH:
+     * - Token stored in SPRING_SESSION_ATTRIBUTES (not database)
+     * - Token lives as long as session (no expiration)
+     * - Automatically cleaned when session expires
+     * - No token refresh needed
+     * - Faster validation (session attribute lookup)
      *
-     * DISTRIBUTED SYSTEM IMPROVEMENTS:
-     * - All timestamps are UTC (no timezone confusion)
-     * - Pre-built JSON eliminates string concatenation race conditions
-     * - Prevents race conditions across data centers
-     * - Uses primary key lookup for optimal performance
-     *
-     * This is the KEY method for auto-refresh functionality:
-     * - Every valid API request automatically extends the token expiration
-     * - Synchronizes with session expiration
-     * - Updates lastUsedAt in JSON for audit trail
-     *
-     * @param tokenId The access token ID (authentication_token_id) to validate
-     * @return Optional containing session ID if valid, empty otherwise
+     * @param session The HTTP session
+     * @return The generated access token value
      */
-    @Transactional
-    public Optional<String> validateAndExtendAccessToken(String tokenId) {
-        // Generate UTC timestamp FIRST (consistent time reference for all operations)
-        Instant currentUtc = Instant.now();
+    public String generateAccessTokenInSession(HttpSession session) {
+        // Generate UUID as access token
+        String accessToken = UUID.randomUUID().toString();
 
-        // Fetch valid token using Spring Data JPA method name (NO CAST needed!)
-        Optional<AuthenticationToken> tokenOpt = tokenRepository
-            .findByAuthenticationTokenIdAndTokenTypeAndNextExpirTmstpAfter(
-                tokenId,
-                TokenType.ACCESS_TOKEN,
-                currentUtc
-            );
+        // Store in session attributes
+        session.setAttribute(SESSION_ATTR_ACCESS_TOKEN, accessToken);
+        session.setAttribute(SESSION_ATTR_TOKEN_CREATED_AT, Instant.now());
 
-        if (tokenOpt.isEmpty()) {
-            logger.warn("Access token not found or expired: {}", tokenId);
-            return Optional.empty();
-        }
+        logger.info("Generated access token for session: {} (stored in session attribute)",
+            session.getId());
 
-        AuthenticationToken token = tokenOpt.get();
-
-        // Extend expiration using entity method (updates both expiration and JSON metadata)
-        token.extendExpiration(ACCESS_TOKEN_VALIDITY_MIN);
-
-        // Save - Hibernate generates UPDATE automatically (NO CAST needed!)
-        tokenRepository.save(token);
-
-        String sessionId = token.getSysId();
-        logger.debug("Access token validated and extended for session: {} (new expiration: {})",
-            sessionId, token.getNextExpirTmstp());
-        return Optional.of(sessionId);
+        return accessToken;
     }
 
     /**
-     * Revoke all tokens for a session (on logout).
-     * Removes both authorization codes and access tokens.
+     * Validate access token against session attribute.
      *
-     * DISTRIBUTED SYSTEM: Safe for concurrent calls from multiple DCs.
-     * - DELETE operation is idempotent (safe to call multiple times)
-     * - If tokens already deleted, returns 0 (no error)
-     * - Foreign key CASCADE ensures cleanup even if listener doesn't fire
+     * NEW APPROACH:
+     * - No database lookup required
+     * - Just compare token from request with session attribute
+     * - If session expired, attribute doesn't exist (returns false)
+     * - If token doesn't match, returns false
      *
-     * Called by:
-     * - SessionEventListener when session is destroyed
-     * - Explicit logout endpoint
-     * - Database CASCADE when session deleted
-     *
-     * @param sessionId The session ID whose tokens should be revoked
+     * @param session The HTTP session (Spring Session auto-loaded)
+     * @param tokenFromRequest The token from request header
+     * @return true if token is valid, false otherwise
      */
-    @Transactional
-    public void revokeTokensForSession(String sessionId) {
-        int deleted = tokenRepository.deleteBySysId(sessionId);
+    public boolean validateAccessToken(HttpSession session, String tokenFromRequest) {
+        if (tokenFromRequest == null || tokenFromRequest.isBlank()) {
+            logger.debug("Access token missing from request");
+            return false;
+        }
 
-        if (deleted > 0) {
-            logger.info("Revoked {} token(s) for session: {}", deleted, sessionId);
+        if (session == null) {
+            logger.debug("Session not found");
+            return false;
+        }
+
+        // Get token from session attribute
+        String sessionToken = (String) session.getAttribute(SESSION_ATTR_ACCESS_TOKEN);
+
+        if (sessionToken == null) {
+            logger.debug("No access token found in session: {}", session.getId());
+            return false;
+        }
+
+        // Compare tokens
+        boolean valid = tokenFromRequest.equals(sessionToken);
+
+        if (valid) {
+            logger.debug("Access token validated for session: {}", session.getId());
         } else {
-            // Already revoked (by another DC or CASCADE) - this is normal in multi-DC
-            logger.debug("No tokens found for session (already revoked): {}", sessionId);
+            logger.warn("Access token mismatch for session: {}", session.getId());
+        }
+
+        return valid;
+    }
+
+    /**
+     * Revoke access token from session.
+     * Called on explicit logout.
+     *
+     * Note: If session is invalidated, Spring automatically clears all attributes,
+     * so this is optional (belt and suspenders approach).
+     *
+     * @param session The HTTP session
+     */
+    public void revokeAccessToken(HttpSession session) {
+        if (session != null) {
+            session.removeAttribute(SESSION_ATTR_ACCESS_TOKEN);
+            session.removeAttribute(SESSION_ATTR_TOKEN_CREATED_AT);
+            logger.info("Revoked access token from session: {}", session.getId());
         }
     }
 
     /**
-     * Scheduled cleanup of expired tokens.
-     * Runs every 5 minutes to maintain database hygiene.
+     * Cleanup expired authorization codes only.
+     * Runs every 5 minutes.
      *
-     * RACE-CONDITION PROOF DESIGN:
-     * - Uses UTC timestamp generated in Java before queries
-     * - All comparisons done against consistent UTC time
-     * - Safe to run on all instances simultaneously (idempotent)
-     * - No race conditions (DELETE operations are atomic)
-     *
-     * Performs two cleanup operations:
-     * 1. Delete expired tokens (both authorization codes and access tokens)
-     * 2. Delete old used authorization codes (keep for 5 min audit trail)
+     * Note: Access tokens no longer need cleanup (stored in session attributes,
+     * auto-deleted by Spring Session when session expires).
      */
     @Scheduled(fixedRate = 300000)  // Every 5 minutes
     @Transactional
-    public void cleanupExpiredTokens() {
-        // Generate UTC timestamp BEFORE queries (consistent time reference)
+    public void cleanupExpiredAuthorizationCodes() {
         Instant currentUtc = Instant.now();
 
-        // Delete expired tokens using Spring Data JPA method name (NO CAST needed!)
-        // This includes both expired authorization codes and expired access tokens
-        int expiredCount = tokenRepository.deleteByNextExpirTmstpBefore(currentUtc);
+        // Delete only expired authorization codes (access tokens no longer in this table)
+        Long expiredCount = tokenRepository.deleteByNextExpirTmstpBefore(currentUtc);
 
-        if (expiredCount > 0) {
-            logger.info("Cleanup: {} expired tokens deleted", expiredCount);
+        if (expiredCount != null && expiredCount > 0) {
+            logger.info("Cleanup: {} expired authorization code(s) deleted", expiredCount);
         }
-
-        // Note: Authorization codes are deleted immediately after use,
-        // so we don't need a separate cleanup for "used" codes
     }
 }

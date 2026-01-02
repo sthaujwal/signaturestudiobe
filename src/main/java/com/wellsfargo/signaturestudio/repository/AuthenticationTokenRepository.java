@@ -101,8 +101,8 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
      *
      * @return Number of tokens deleted
      */
-    @Modifying
-    int deleteBySysId(String sysId);
+    @Modifying(clearAutomatically = true)
+    Long deleteBySysId(String sysId);
 
     /**
      * Delete expired tokens (scheduled cleanup).
@@ -114,8 +114,8 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
      * @param cutoffUtc UTC timestamp - tokens expired before this will be deleted
      * @return Number of tokens deleted
      */
-    @Modifying
-    int deleteByNextExpirTmstpBefore(Instant cutoffUtc);
+    @Modifying(clearAutomatically = true)
+    Long deleteByNextExpirTmstpBefore(Instant cutoffUtc);
 
     /**
      * Delete multiple tokens by IDs (used for batch cleanup).
@@ -126,6 +126,6 @@ public interface AuthenticationTokenRepository extends JpaRepository<Authenticat
      * @param ids List of token IDs to delete
      * @return Number of tokens deleted
      */
-    @Modifying
-    int deleteByAuthenticationTokenIdIn(List<String> ids);
+    @Modifying(clearAutomatically = true)
+    Long deleteByAuthenticationTokenIdIn(List<String> ids);
 }
