@@ -129,18 +129,28 @@ public class AuthenticationTokenService {
      * - No token refresh needed
      * - Faster validation (session attribute lookup)
      *
+     * If token already exists for session, returns existing token (idempotent).
+     *
      * @param session The HTTP session
-     * @return The generated access token value
+     * @return The generated (or existing) access token value
      */
     public String generateAccessTokenInSession(HttpSession session) {
-        // Generate UUID as access token
+        // Check if token already exists (avoid duplicate insert)
+        String existingToken = (String) session.getAttribute(SESSION_ATTR_ACCESS_TOKEN);
+
+        if (existingToken != null) {
+            logger.debug("Access token already exists for session: {} (reusing)", session.getId());
+            return existingToken;
+        }
+
+        // Generate new UUID as access token
         String accessToken = UUID.randomUUID().toString();
 
-        // Store in session attributes
+        // Store in session attributes (Spring Session handles INSERT/UPDATE)
         session.setAttribute(SESSION_ATTR_ACCESS_TOKEN, accessToken);
         session.setAttribute(SESSION_ATTR_TOKEN_CREATED_AT, Instant.now());
 
-        logger.info("Generated access token for session: {} (stored in session attribute)",
+        logger.info("Generated new access token for session: {} (stored in session attribute)",
             session.getId());
 
         return accessToken;
