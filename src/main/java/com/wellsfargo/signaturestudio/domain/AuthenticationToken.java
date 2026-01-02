@@ -1,5 +1,6 @@
 package com.wellsfargo.signaturestudio.domain;
 
+import com.wellsfargo.signaturestudio.config.InstantAttributeConverter;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -52,12 +53,15 @@ public class AuthenticationToken {
     private Integer expirProdInMin;
 
     @Column(name = "next_expir_tmstp", nullable = false)
+    @Convert(converter = InstantAttributeConverter.class)
     private Instant nextExpirTmstp;
 
     @Column(name = "row_crte_tmstp", nullable = false, updatable = false)
+    @Convert(converter = InstantAttributeConverter.class)
     private Instant rowCrteTmstp;
 
     @Column(name = "row_lst_updt_tmstp", nullable = false)
+    @Convert(converter = InstantAttributeConverter.class)
     private Instant rowLstUpdtTmstp;
 
     @PrePersist
