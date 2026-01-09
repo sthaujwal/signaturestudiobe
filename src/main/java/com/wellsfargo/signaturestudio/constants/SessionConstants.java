@@ -33,7 +33,10 @@ public final class SessionConstants {
     
     /** Session key for authentication status (Boolean) */
     public static final String AUTHENTICATED = "authenticated";
-    
+
+    /** Session key for user role (String) - e.g., "ADMIN", "USER", "MANAGER" */
+    public static final String ROLE = "role";
+
     // Session Metadata
     /** Session key for login timestamp (Long - milliseconds since epoch) */
     public static final String LOGIN_TIME = "loginTime";

@@ -135,23 +135,33 @@ public class AuthenticationTokenService {
      * @return The generated (or existing) access token value
      */
     public String generateAccessTokenInSession(HttpSession session) {
-        // Check if token already exists (avoid duplicate insert)
+        if (session == null) {
+            throw new IllegalArgumentException("Session cannot be null");
+        }
+
+        String sessionId = session.getId();
+        logger.debug("generateAccessTokenInSession called for session: {}", sessionId);
+
+        // Check if token already exists (avoid duplicate)
         String existingToken = (String) session.getAttribute(SESSION_ATTR_ACCESS_TOKEN);
 
-        if (existingToken != null) {
-            logger.debug("Access token already exists for session: {} (reusing)", session.getId());
+        if (existingToken != null && !existingToken.isBlank()) {
+            logger.info("Access token already exists for session: {} (reusing existing token)", sessionId);
             return existingToken;
         }
+
+        logger.info("No existing token found for session: {}, generating new one", sessionId);
 
         // Generate new UUID as access token
         String accessToken = UUID.randomUUID().toString();
 
-        // Store in session attributes (Spring Session handles INSERT/UPDATE)
+        // Store in session attributes
+        // Spring Session should handle INSERT vs UPDATE automatically
         session.setAttribute(SESSION_ATTR_ACCESS_TOKEN, accessToken);
         session.setAttribute(SESSION_ATTR_TOKEN_CREATED_AT, Instant.now());
 
-        logger.info("Generated new access token for session: {} (stored in session attribute)",
-            session.getId());
+        logger.info("Generated new access token for session: {} (token: {}...)",
+            sessionId, accessToken.substring(0, 8));
 
         return accessToken;
     }
