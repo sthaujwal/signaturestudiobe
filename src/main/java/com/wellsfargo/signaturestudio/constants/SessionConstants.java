@@ -37,6 +37,9 @@ public final class SessionConstants {
     /** Session key for user role (String) - e.g., "ADMIN", "USER", "MANAGER" */
     public static final String ROLE = "role";
 
+    /** Session key for organization admin status (Boolean) */
+    public static final String IS_ORG_ADMIN = "isOrgAdmin";
+
     // Session Metadata
     /** Session key for login timestamp (Long - milliseconds since epoch) */
     public static final String LOGIN_TIME = "loginTime";

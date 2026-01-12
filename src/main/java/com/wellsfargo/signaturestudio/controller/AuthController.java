@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -160,6 +161,7 @@ public class AuthController {
      * - DPD_SIGNATURE_STUDIO_TEST_ADMIN -> Account: TEST, Role: ADMIN
      * - DPD_SIGNATURE_STUDIO_TEST2_SENDER -> Account: TEST2, Role: SENDER
      * - DPD_SIGNATURE_STUDIO_TEST_READ_ONLY -> Account: TEST, Role: READ_ONLY
+     * - DPD_SIGNATURE_STUDIO_ORG_ADMIN -> Organization-level admin (no account key)
      *
      * @param authUser The authenticated user with roles from Ping IdP
      * @param session The HTTP session
@@ -171,6 +173,34 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response,
             HttpSession session) {
+
+        // CRITICAL: Check for ORG_ADMIN role FIRST, before parsing account-level roles
+        boolean isOrgAdmin = authUser.getRoles().stream()
+            .anyMatch(role -> "DPD_SIGNATURE_STUDIO_ORG_ADMIN".equals(role));
+
+        if (isOrgAdmin) {
+            // Set ORG_ADMIN session attributes
+            session.setAttribute(SessionConstants.IS_ORG_ADMIN, true);
+            session.setAttribute(SessionConstants.ROLE, "ORG_ADMIN");
+            session.setAttribute(SessionConstants.AUTHENTICATED, true);
+            session.setAttribute(SessionConstants.USER_ID, authUser.getUserId());
+            session.setAttribute(SessionConstants.USERNAME, authUser.getUsername());
+
+            // Ensure CSRF token is generated
+            csrfTokenService.getOrGenerateToken(request, response);
+
+            logger.info("ORG_ADMIN role detected for user: {} | Session configured for organization-level access",
+                authUser.getUserId());
+
+            // ORG_ADMIN gets empty account list (they can access all accounts via org-admin APIs)
+            session.setAttribute(SessionConstants.ACCOUNTS_WITH_ROLES, new ArrayList<AccountWithRole>());
+
+            return ResponseEntity.ok(new ArrayList<>());
+        }
+
+        // Regular user flow - parse account-level roles
+        session.setAttribute(SessionConstants.IS_ORG_ADMIN, false);
+
         List<AccountWithRole> accountsWithRoles = accountService.getAccountsWithRoles(authUser);
 
         // Store in session for quick access throughout the session

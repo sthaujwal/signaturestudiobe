@@ -1,21 +1,22 @@
 package com.wellsfargo.signaturestudio.service;
 
-import com.wellsfargo.signaturestudio.domain.Account;
-import com.wellsfargo.signaturestudio.domain.AccountWithRole;
-import com.wellsfargo.signaturestudio.domain.AuthUser;
+import com.wellsfargo.signaturestudio.domain.*;
+import com.wellsfargo.signaturestudio.exception.DuplicateAccountKeyException;
 import com.wellsfargo.signaturestudio.exception.ErrorCode;
+import com.wellsfargo.signaturestudio.exception.InvalidAccountKeyException;
 import com.wellsfargo.signaturestudio.exception.ServiceException;
 import com.wellsfargo.signaturestudio.model.AccountEntity;
 import com.wellsfargo.signaturestudio.model.AccountRole;
 import com.wellsfargo.signaturestudio.repository.AccountRepository;
 import com.wellsfargo.signaturestudio.repository.AccountRoleRepository;
+import jakarta.servlet.http.HttpSession;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import jakarta.servlet.http.HttpSession;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.Instant;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -208,10 +209,12 @@ public class AccountService {
     
     /**
      * Filter roles that start with DPD_SIGNATURE_STUDIO_ prefix.
+     * Excludes ORG_ADMIN role as it's organization-level, not account-level.
      */
     private List<String> filterSignatureStudioRoles(List<String> roles) {
         return roles.stream()
             .filter(role -> role != null && role.startsWith(ROLE_PREFIX))
+            .filter(role -> !role.equals("DPD_SIGNATURE_STUDIO_ORG_ADMIN"))  // Exclude ORG_ADMIN
             .collect(Collectors.toList());
     }
     
@@ -330,7 +333,7 @@ public class AccountService {
     
     /**
      * Get user's role for a specific account from session.
-     * 
+     *
      * @param accountId The account ID
      * @param session The HTTP session
      * @return Role name (ADMIN, SENDER, etc.) or null if not found
@@ -339,12 +342,268 @@ public class AccountService {
         if (accountId == null || session == null) {
             return null;
         }
-        
+
         return sessionService.getAccountsWithRoles(session).stream()
             .filter(account -> accountId.equals(account.getAccountId()))
             .map(AccountWithRole::getRole)
             .findFirst()
             .orElse(null);
+    }
+
+    // ==================== ORG_ADMIN Account Management Methods ====================
+
+    /**
+     * Create a new account (ORG_ADMIN only).
+     *
+     * Creates an account with:
+     * - Generated UUIDs for id and accountId
+     * - Uppercase account key
+     * - Default account roles (ADMIN, SENDER, AUDIT, READ_ONLY)
+     *
+     * @param request Account creation request with name, key, and optional settings
+     * @param createdBy Username of the user creating the account
+     * @return Created account entity
+     * @throws InvalidAccountKeyException if account key is invalid
+     * @throws DuplicateAccountKeyException if account key already exists
+     */
+    @Transactional
+    public AccountEntity createAccount(CreateAccountRequest request, String createdBy) {
+        logger.info("Creating new account: {} by user: {}", request.getAccountKey(), createdBy);
+
+        // Validate account key
+        validateAccountKey(request.getAccountKey());
+
+        // Create account entity
+        AccountEntity account = new AccountEntity();
+        account.setId(UUID.randomUUID().toString());
+        account.setAccountId(UUID.randomUUID().toString());
+        account.setAccountName(request.getAccountName());
+        account.setAccountKey(request.getAccountKey().toUpperCase());
+        account.setCreatedAt(Instant.now());
+        account.setModifiedAt(Instant.now());
+
+        // Note: AccountSettings would be stored separately if needed
+        // For now, we're focusing on basic account creation
+
+        // Create default account roles
+        createDefaultAccountRoles(account);
+
+        // Save account (cascade will save roles)
+        AccountEntity savedAccount = accountRepository.save(account);
+
+        auditLogger.info("ACCOUNT_CREATED | AccountId: {} | AccountKey: {} | CreatedBy: {}",
+            savedAccount.getAccountId(), savedAccount.getAccountKey(), createdBy);
+
+        // Log the role names that need to be created in Auth0/Ping IdP
+        logRequiredAuth0Roles(savedAccount);
+
+        return savedAccount;
+    }
+
+    /**
+     * Update an existing account (ORG_ADMIN only).
+     *
+     * @param accountId The account ID to update
+     * @param request Update request with name and/or settings
+     * @param modifiedBy Username of the user updating the account
+     * @return Updated account entity
+     * @throws ServiceException if account not found
+     */
+    @Transactional
+    public AccountEntity updateAccount(String accountId, UpdateAccountRequest request, String modifiedBy) {
+        logger.info("Updating account: {} by user: {}", accountId, modifiedBy);
+
+        // Load existing account
+        AccountEntity account = accountRepository.findByAccountId(accountId)
+            .orElseThrow(() -> new ServiceException(ErrorCode.RESOURCE_NOT_FOUND,
+                "Account not found: " + accountId));
+
+        // Update name if provided
+        if (request.getAccountName() != null && !request.getAccountName().trim().isEmpty()) {
+            account.setAccountName(request.getAccountName());
+        }
+
+        // Note: AccountSettings would be updated separately if needed
+        // For now, we're focusing on basic account name updates
+
+        account.setModifiedAt(Instant.now());
+
+        AccountEntity updatedAccount = accountRepository.save(account);
+
+        auditLogger.info("ACCOUNT_UPDATED | AccountId: {} | AccountKey: {} | ModifiedBy: {}",
+            updatedAccount.getAccountId(), updatedAccount.getAccountKey(), modifiedBy);
+
+        return updatedAccount;
+    }
+
+    /**
+     * Get all accounts with summary information (ORG_ADMIN only).
+     *
+     * @return List of all accounts with summary data
+     */
+    public List<AccountSummary> getAllAccounts() {
+        logger.info("Getting all accounts");
+
+        List<AccountEntity> accounts = accountRepository.findAll();
+
+        return accounts.stream()
+            .map(this::convertToAccountSummary)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Get detailed account information by account ID (ORG_ADMIN only).
+     *
+     * @param accountId The account ID
+     * @return Account entity
+     * @throws ServiceException if account not found
+     */
+    public AccountEntity getAccountDetails(String accountId) {
+        logger.info("Getting account details: {}", accountId);
+
+        return accountRepository.findByAccountId(accountId)
+            .orElseThrow(() -> new ServiceException(ErrorCode.RESOURCE_NOT_FOUND,
+                "Account not found: " + accountId));
+    }
+
+    /**
+     * Validate account key format and uniqueness.
+     *
+     * Rules:
+     * - Length: 2-50 characters
+     * - Format: Only uppercase letters, numbers, and underscores
+     * - Not a reserved word (ADMIN, SENDER, AUDIT, READ_ONLY, ORG_ADMIN, ORG)
+     * - Must be unique (case-insensitive)
+     *
+     * @param accountKey The account key to validate
+     * @throws InvalidAccountKeyException if validation fails
+     * @throws DuplicateAccountKeyException if key already exists
+     */
+    private void validateAccountKey(String accountKey) {
+        // Length check
+        if (accountKey == null || accountKey.length() < 2) {
+            throw new InvalidAccountKeyException("Account key must be at least 2 characters", accountKey);
+        }
+        if (accountKey.length() > 50) {
+            throw new InvalidAccountKeyException("Account key must be 50 characters or less", accountKey);
+        }
+
+        // Format check (uppercase letters, numbers, underscores only)
+        if (!accountKey.matches("^[A-Z0-9_]+$")) {
+            throw new InvalidAccountKeyException(
+                "Account key must contain only uppercase letters, numbers, and underscores", accountKey);
+        }
+
+        // Reserved word check
+        List<String> reservedWords = Arrays.asList("ADMIN", "SENDER", "AUDIT", "READ_ONLY", "ORG_ADMIN", "ORG");
+        if (reservedWords.contains(accountKey.toUpperCase())) {
+            throw new InvalidAccountKeyException("Account key '" + accountKey + "' is reserved", accountKey);
+        }
+
+        // Uniqueness check (case-insensitive)
+        if (accountRepository.existsByAccountKey(accountKey.toUpperCase())) {
+            throw new DuplicateAccountKeyException("Account key '" + accountKey + "' already exists", accountKey);
+        }
+    }
+
+    /**
+     * Create default AccountRole entries for a new account.
+     *
+     * Creates roles:
+     * - DPD_SIGNATURE_STUDIO_{ACCOUNT_KEY}_ADMIN
+     * - DPD_SIGNATURE_STUDIO_{ACCOUNT_KEY}_SENDER
+     * - DPD_SIGNATURE_STUDIO_{ACCOUNT_KEY}_AUDIT
+     * - DPD_SIGNATURE_STUDIO_{ACCOUNT_KEY}_READ_ONLY
+     *
+     * @param account The account entity
+     */
+    private void createDefaultAccountRoles(AccountEntity account) {
+        String[] roleTypes = {"ADMIN", "SENDER", "AUDIT", "READ_ONLY"};
+
+        for (String roleType : roleTypes) {
+            AccountRole role = new AccountRole();
+            role.setId(UUID.randomUUID().toString());
+            role.setRoleName(ROLE_PREFIX + account.getAccountKey() + "_" + roleType);
+            role.setAccount(account);
+            account.getRoles().add(role);
+        }
+
+        logger.debug("Created {} default roles for account: {}", roleTypes.length, account.getAccountKey());
+    }
+
+    /**
+     * Log the role names that need to be created in Auth0/Ping IdP.
+     *
+     * These roles must be manually created in the identity provider after
+     * account creation in the application database.
+     *
+     * @param account The newly created account
+     */
+    private void logRequiredAuth0Roles(AccountEntity account) {
+        logger.info("================================================================================");
+        logger.info("ACTION REQUIRED: Create the following roles in Auth0/Ping IdP:");
+        logger.info("================================================================================");
+
+        for (AccountRole role : account.getRoles()) {
+            logger.info("  - {}", role.getRoleName());
+        }
+
+        logger.info("================================================================================");
+    }
+
+    /**
+     * Convert AccountEntity to AccountSummary DTO.
+     *
+     * @param account The account entity
+     * @return Account summary
+     */
+    private AccountSummary convertToAccountSummary(AccountEntity account) {
+        AccountSummary summary = new AccountSummary();
+        summary.setId(account.getId());
+        summary.setAccountId(account.getAccountId());
+        summary.setAccountName(account.getAccountName());
+        summary.setAccountKey(account.getAccountKey());
+        summary.setCreatedAt(account.getCreatedAt());
+        summary.setModifiedAt(account.getModifiedAt());
+
+        // TODO: Add user count query if needed
+        // For now, set to null to indicate it's not calculated
+        summary.setUserCount(null);
+
+        return summary;
+    }
+
+    /**
+     * Check if user has access to a specific account (enhanced for ORG_ADMIN support).
+     *
+     * @param userId The user ID
+     * @param accountId The account ID to check
+     * @param session The HTTP session
+     * @return true if user has access (either through account-level role or ORG_ADMIN)
+     */
+    public boolean hasAccountAccess(String userId, String accountId, HttpSession session) {
+        if (userId == null || accountId == null || session == null) {
+            return false;
+        }
+
+        // Check if user is ORG_ADMIN first
+        Boolean isOrgAdmin = (Boolean) session.getAttribute(com.wellsfargo.signaturestudio.constants.SessionConstants.IS_ORG_ADMIN);
+        if (Boolean.TRUE.equals(isOrgAdmin)) {
+            logger.debug("User {} has ORG_ADMIN access to account {}", userId, accountId);
+            return true;
+        }
+
+        // Regular user - check if account is in their list
+        List<AccountWithRole> accounts = sessionService.getAccountsWithRoles(session);
+        boolean hasAccess = accounts.stream()
+            .anyMatch(account -> accountId.equals(account.getAccountId()));
+
+        if (!hasAccess) {
+            auditLogger.warn("ACCOUNT_ACCESS_DENIED | User: {} | AccountId: {} | Reason: Account not accessible",
+                userId, accountId);
+        }
+
+        return hasAccess;
     }
 }
 

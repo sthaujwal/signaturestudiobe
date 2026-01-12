@@ -38,4 +38,11 @@ public @interface RequireRole {
      * @return custom error message
      */
     String message() default "Access denied: insufficient permissions";
+
+    /**
+     * Human-readable description of the operation this annotation protects.
+     * Used by the permission registry for documentation and UI rendering.
+     * @return operation description (e.g., "View account settings", "Create new account")
+     */
+    String operation() default "";
 }

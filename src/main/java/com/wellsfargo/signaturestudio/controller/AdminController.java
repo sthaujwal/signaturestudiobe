@@ -4,6 +4,8 @@ import com.wellsfargo.signaturestudio.constants.SessionConstants;
 import com.wellsfargo.signaturestudio.domain.AccountSettings;
 import com.wellsfargo.signaturestudio.domain.EmailTemplate;
 import com.wellsfargo.signaturestudio.domain.NotificationSettings;
+import com.wellsfargo.signaturestudio.repository.AccountRepository;
+import com.wellsfargo.signaturestudio.service.AccountService;
 import com.wellsfargo.signaturestudio.service.AdminService;
 import com.wellsfargo.signaturestudio.service.AlertService;
 import jakarta.servlet.http.HttpSession;
@@ -24,14 +26,24 @@ public class AdminController {
     
     private final AdminService adminService;
     private final AlertService alertService;
-    
-    public AdminController(AdminService adminService, AlertService alertService) {
+    private final AccountService accountService;
+    private final AccountRepository accountRepository;
+
+    public AdminController(AdminService adminService,
+                          AlertService alertService,
+                          AccountService accountService,
+                          AccountRepository accountRepository) {
         this.adminService = adminService;
         this.alertService = alertService;
+        this.accountService = accountService;
+        this.accountRepository = accountRepository;
     }
     
     /**
-     * Get account settings for the current account
+     * Get account settings for the current account.
+     *
+     * Regular users: Get settings for their current account
+     * ORG_ADMIN: Can specify any accountId parameter to view any account's settings
      */
     @GetMapping("/settings/account")
     public ResponseEntity<AccountSettings> getAccountSettings(
@@ -41,16 +53,44 @@ public class AdminController {
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        
-        String currentAccountId = accountId != null ? accountId : 
+
+        // Determine which account to access
+        String currentAccountId = accountId != null ? accountId :
             (String) session.getAttribute(SessionConstants.ACCOUNT_ID);
-        
+
+        // Handle case where no account is specified
+        if (currentAccountId == null) {
+            Boolean isOrgAdmin = (Boolean) session.getAttribute(SessionConstants.IS_ORG_ADMIN);
+            if (Boolean.TRUE.equals(isOrgAdmin)) {
+                return ResponseEntity.badRequest().body(null); // ORG_ADMIN must specify accountId
+            }
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // Authorization check
+        Boolean isOrgAdmin = (Boolean) session.getAttribute(SessionConstants.IS_ORG_ADMIN);
+        if (!Boolean.TRUE.equals(isOrgAdmin)) {
+            // Regular user - verify they have access to requested account
+            if (!accountService.hasAccountAccess(userId, currentAccountId, session)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+        }
+        // ORG_ADMIN bypasses account access check
+
+        // Validate account exists
+        if (!accountRepository.existsByAccountId(currentAccountId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
         AccountSettings settings = adminService.getAccountSettings(currentAccountId);
         return ResponseEntity.ok(settings);
     }
     
     /**
-     * Update account settings
+     * Update account settings.
+     *
+     * Regular users: Must have ADMIN role for their account
+     * ORG_ADMIN: Can update any account's settings
      */
     @PutMapping("/settings/account")
     public ResponseEntity<Void> updateAccountSettings(
@@ -61,16 +101,44 @@ public class AdminController {
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        
-        String currentAccountId = accountId != null ? accountId : 
+
+        // Determine which account to access
+        String currentAccountId = accountId != null ? accountId :
             (String) session.getAttribute(SessionConstants.ACCOUNT_ID);
-        
+
+        // Handle case where no account is specified
+        if (currentAccountId == null) {
+            Boolean isOrgAdmin = (Boolean) session.getAttribute(SessionConstants.IS_ORG_ADMIN);
+            if (Boolean.TRUE.equals(isOrgAdmin)) {
+                return ResponseEntity.badRequest().build(); // ORG_ADMIN must specify accountId
+            }
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // Authorization check
+        Boolean isOrgAdmin = (Boolean) session.getAttribute(SessionConstants.IS_ORG_ADMIN);
+        if (!Boolean.TRUE.equals(isOrgAdmin)) {
+            // Regular user - verify they have access to requested account
+            if (!accountService.hasAccountAccess(userId, currentAccountId, session)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+        }
+        // ORG_ADMIN bypasses account access check
+
+        // Validate account exists
+        if (!accountRepository.existsByAccountId(currentAccountId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
         adminService.updateAccountSettings(currentAccountId, settings);
         return ResponseEntity.ok().build();
     }
     
     /**
-     * Get notification settings for the current account
+     * Get notification settings for the current account.
+     *
+     * Regular users: Get settings for their current account
+     * ORG_ADMIN: Can specify any accountId parameter to view any account's settings
      */
     @GetMapping("/settings/notifications")
     public ResponseEntity<NotificationSettings> getNotificationSettings(
@@ -80,16 +148,44 @@ public class AdminController {
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        
-        String currentAccountId = accountId != null ? accountId : 
+
+        // Determine which account to access
+        String currentAccountId = accountId != null ? accountId :
             (String) session.getAttribute(SessionConstants.ACCOUNT_ID);
-        
+
+        // Handle case where no account is specified
+        if (currentAccountId == null) {
+            Boolean isOrgAdmin = (Boolean) session.getAttribute(SessionConstants.IS_ORG_ADMIN);
+            if (Boolean.TRUE.equals(isOrgAdmin)) {
+                return ResponseEntity.badRequest().body(null); // ORG_ADMIN must specify accountId
+            }
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // Authorization check
+        Boolean isOrgAdmin = (Boolean) session.getAttribute(SessionConstants.IS_ORG_ADMIN);
+        if (!Boolean.TRUE.equals(isOrgAdmin)) {
+            // Regular user - verify they have access to requested account
+            if (!accountService.hasAccountAccess(userId, currentAccountId, session)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+        }
+        // ORG_ADMIN bypasses account access check
+
+        // Validate account exists
+        if (!accountRepository.existsByAccountId(currentAccountId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
         NotificationSettings settings = adminService.getNotificationSettings(currentAccountId);
         return ResponseEntity.ok(settings);
     }
     
     /**
-     * Update notification settings
+     * Update notification settings.
+     *
+     * Regular users: Must have ADMIN role for their account
+     * ORG_ADMIN: Can update any account's settings
      */
     @PutMapping("/settings/notifications")
     public ResponseEntity<Void> updateNotificationSettings(
@@ -100,10 +196,35 @@ public class AdminController {
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        
-        String currentAccountId = accountId != null ? accountId : 
+
+        // Determine which account to access
+        String currentAccountId = accountId != null ? accountId :
             (String) session.getAttribute(SessionConstants.ACCOUNT_ID);
-        
+
+        // Handle case where no account is specified
+        if (currentAccountId == null) {
+            Boolean isOrgAdmin = (Boolean) session.getAttribute(SessionConstants.IS_ORG_ADMIN);
+            if (Boolean.TRUE.equals(isOrgAdmin)) {
+                return ResponseEntity.badRequest().build(); // ORG_ADMIN must specify accountId
+            }
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // Authorization check
+        Boolean isOrgAdmin = (Boolean) session.getAttribute(SessionConstants.IS_ORG_ADMIN);
+        if (!Boolean.TRUE.equals(isOrgAdmin)) {
+            // Regular user - verify they have access to requested account
+            if (!accountService.hasAccountAccess(userId, currentAccountId, session)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+        }
+        // ORG_ADMIN bypasses account access check
+
+        // Validate account exists
+        if (!accountRepository.existsByAccountId(currentAccountId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
         adminService.updateNotificationSettings(currentAccountId, settings);
         return ResponseEntity.ok().build();
     }
