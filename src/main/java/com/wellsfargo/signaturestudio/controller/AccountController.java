@@ -5,10 +5,12 @@ import com.wellsfargo.signaturestudio.domain.Session;
 import com.wellsfargo.signaturestudio.domain.SwitchAccountRequest;
 import com.wellsfargo.signaturestudio.service.AccountService;
 import com.wellsfargo.signaturestudio.service.SessionService;
+import com.wellsfargo.signaturestudio.validation.NoXss;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,7 +18,7 @@ import java.util.Map;
 
 /**
  * REST controller for account management operations.
- * 
+ *
  * Handles:
  * - Getting user's available accounts
  * - Switching between accounts
@@ -24,6 +26,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/accounts")
+@Validated  // Required for @PathVariable and @RequestParam validation
 public class AccountController {
     
     private final AccountService accountService;
@@ -124,14 +127,14 @@ public class AccountController {
     
     /**
      * Validate if user has access to a specific account.
-     * 
+     *
      * @param accountId The account ID to validate
      * @param session The HTTP session
      * @return Validation result
      */
     @GetMapping("/{accountId}/validate")
     public ResponseEntity<Map<String, Object>> validateAccountAccess(
-            @PathVariable String accountId,
+            @PathVariable @NoXss String accountId,
             HttpSession session) {
         
         String username = sessionService.getUsername(session);

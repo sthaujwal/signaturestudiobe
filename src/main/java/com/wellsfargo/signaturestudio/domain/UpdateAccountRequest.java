@@ -1,5 +1,6 @@
 package com.wellsfargo.signaturestudio.domain;
 
+import com.wellsfargo.signaturestudio.validation.NoXss;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.Size;
  */
 public class UpdateAccountRequest {
 
+    @NoXss
     @Size(min = 1, max = 255, message = "Account name must be between 1 and 255 characters")
     private String accountName;
 
