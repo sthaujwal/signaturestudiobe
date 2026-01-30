@@ -32,7 +32,7 @@ public class TransactionSpecifications {
         if (accountIds != null && !accountIds.isEmpty()) {
             builder.withIn("accountId", accountIds);
         } else {
-            builder.withEquals("createdBy", userId);
+            builder.withEqualsIgnoreCase("createdBy", userId);
         }
 
         // Apply filter criteria if provided

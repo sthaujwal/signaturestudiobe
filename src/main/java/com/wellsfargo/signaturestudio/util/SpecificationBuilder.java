@@ -39,6 +39,17 @@ public class SpecificationBuilder<T> {
     }
 
     /**
+     * Add a case-insensitive equals predicate for string values.
+     */
+    public SpecificationBuilder<T> withEqualsIgnoreCase(String field, String value) {
+        if (value != null && !value.isEmpty()) {
+            specifications.add((root, query, cb) ->
+                cb.equal(cb.lower(root.get(field)), value.toLowerCase()));
+        }
+        return this;
+    }
+
+    /**
      * Add an IN predicate if values list is not empty.
      */
     public SpecificationBuilder<T> withIn(String field, List<?> values) {
