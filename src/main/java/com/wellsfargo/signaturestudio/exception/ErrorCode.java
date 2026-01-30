@@ -34,6 +34,14 @@ public enum ErrorCode {
     BRANDING_SERVICE_ERROR("EXT_004", "Branding service error", HttpStatus.BAD_GATEWAY),
     SERVICE_UNAVAILABLE("EXT_005", "Service unavailable", HttpStatus.SERVICE_UNAVAILABLE),
     
+    // Report Errors (400-500)
+    REPORT_NOT_FOUND("REP_001", "Report not found", HttpStatus.NOT_FOUND),
+    REPORT_GENERATION_FAILED("REP_002", "Report generation failed", HttpStatus.INTERNAL_SERVER_ERROR),
+    INVALID_FIELD_SELECTION("REP_003", "Invalid field selection", HttpStatus.BAD_REQUEST),
+    REPORT_FILE_NOT_FOUND("REP_004", "Report file not found", HttpStatus.NOT_FOUND),
+    REPORT_ALREADY_GENERATING("REP_005", "Report is already being generated", HttpStatus.CONFLICT),
+    REPORT_EXECUTION_TIMEOUT("REP_006", "Report execution timeout", HttpStatus.REQUEST_TIMEOUT),
+
     // Internal Server Errors (500)
     INTERNAL_ERROR("INT_001", "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
     DATABASE_ERROR("INT_002", "Database error", HttpStatus.INTERNAL_SERVER_ERROR),

@@ -36,6 +36,11 @@ dependencies {
 	implementation 'org.springframework.ldap:spring-ldap-core'
 	implementation 'org.springframework.security:spring-security-ldap'
 	implementation 'com.unboundid:unboundid-ldapsdk'
+
+	// Reporting dependencies
+	implementation 'org.apache.commons:commons-csv:1.10.0'
+	implementation 'org.springframework.boot:spring-boot-starter-quartz'
+
 	// Oracle JDBC 11 driver with JDBC 4.2 support (required for Instant/TIMESTAMP conversion)
 	runtimeOnly 'com.oracle.database.jdbc:ojdbc11:23.9.0.24.10'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
