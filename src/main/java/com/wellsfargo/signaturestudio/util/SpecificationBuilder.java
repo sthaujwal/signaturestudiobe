@@ -129,7 +129,7 @@ public class SpecificationBuilder<T> {
      */
     public SpecificationBuilder<T> withOr(Specification<T> spec1, Specification<T> spec2) {
         if (spec1 != null && spec2 != null) {
-            specifications.add(Specification.where(spec1).or(spec2));
+            specifications.add(spec1.or(spec2));
         }
         return this;
     }
@@ -139,7 +139,7 @@ public class SpecificationBuilder<T> {
      */
     public Specification<T> build() {
         if (specifications.isEmpty()) {
-            return Specification.where(null); // Returns all records
+            return (root, query, cb) -> cb.conjunction(); // Returns all records (always true)
         }
 
         Specification<T> result = specifications.get(0);
