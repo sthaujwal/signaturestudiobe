@@ -18,9 +18,6 @@ public class ReportFilterCriteria {
     // Status filters
     private List<String> statuses;     // Filter by one or more statuses (pending, in-progress, completed, rejected)
 
-    // Priority filter
-    private List<String> priorities;   // Filter by priority (low, medium, high)
-
     // Form type filter
     private String formType;
 
@@ -68,14 +65,6 @@ public class ReportFilterCriteria {
         this.statuses = statuses;
     }
 
-    public List<String> getPriorities() {
-        return priorities;
-    }
-
-    public void setPriorities(List<String> priorities) {
-        this.priorities = priorities;
-    }
-
     public String getFormType() {
         return formType;
     }
@@ -99,7 +88,6 @@ public class ReportFilterCriteria {
         return createdAfter != null || createdBefore != null ||
                updatedAfter != null || updatedBefore != null ||
                (statuses != null && !statuses.isEmpty()) ||
-               (priorities != null && !priorities.isEmpty()) ||
                formType != null ||
                (searchText != null && !searchText.isEmpty());
     }
