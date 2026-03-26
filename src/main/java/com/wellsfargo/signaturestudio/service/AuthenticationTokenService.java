@@ -48,6 +48,7 @@ public class AuthenticationTokenService {
 
     // Configuration constants
     private static final int AUTHORIZATION_CODE_VALIDITY_MIN = 1;  // 1 minute
+    private static final int ACCESS_TOKEN_VALIDITY_MIN = 30;  // 30 minutes
 
     private final AuthenticationTokenRepository tokenRepository;
 
@@ -167,6 +168,29 @@ public class AuthenticationTokenService {
     }
 
     /**
+     * Generate a long-lived ACCESS_TOKEN in database for a session ID.
+     * Used by legacy token exchange endpoint.
+     *
+     * @param sessionId The session ID to associate with the token
+     * @return The generated access token value
+     */
+    public String generateAccessToken(String sessionId) {
+        String tokenId = UUID.randomUUID().toString();
+
+        AuthenticationToken token = new AuthenticationToken();
+        token.setAuthenticationTokenId(tokenId);
+        token.setTokenType(TokenType.ACCESS_TOKEN);
+        token.setSysId(sessionId);
+        token.setAuthObj(sessionId);
+        token.setExpirProdInMin(ACCESS_TOKEN_VALIDITY_MIN);
+        token.setNextExpirTmstp(Instant.now().plusSeconds(ACCESS_TOKEN_VALIDITY_MIN * 60L));
+
+        tokenRepository.save(token);
+        logger.info("Generated ACCESS_TOKEN for session: {}", sessionId);
+        return tokenId;
+    }
+
+    /**
      * Validate access token against session attribute.
      *
      * NEW APPROACH:
@@ -208,6 +232,36 @@ public class AuthenticationTokenService {
         }
 
         return valid;
+    }
+
+    /**
+     * Validate ACCESS_TOKEN from database and extend expiration.
+     *
+     * @param tokenValue Access token value from request
+     * @return Optional containing session ID if token is valid
+     */
+    @Transactional
+    public Optional<String> validateAndExtendAccessToken(String tokenValue) {
+        if (tokenValue == null || tokenValue.isBlank()) {
+            return Optional.empty();
+        }
+
+        Instant currentUtc = Instant.now();
+        Optional<AuthenticationToken> tokenOpt = tokenRepository
+            .findByAuthenticationTokenIdAndTokenTypeAndNextExpirTmstpAfter(
+                tokenValue,
+                TokenType.ACCESS_TOKEN,
+                currentUtc
+            );
+
+        if (tokenOpt.isEmpty()) {
+            return Optional.empty();
+        }
+
+        AuthenticationToken token = tokenOpt.get();
+        token.extendExpiration(ACCESS_TOKEN_VALIDITY_MIN);
+        tokenRepository.save(token);
+        return Optional.of(token.getSysId());
     }
 
     /**

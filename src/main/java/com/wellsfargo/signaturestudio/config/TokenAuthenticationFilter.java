@@ -125,6 +125,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
         return path.startsWith("/api/public/") ||
                path.equals("/api/auth/login") ||
                path.equals("/api/auth/callback") ||
-               path.equals("/api/auth/exchange");  // Allow token exchange without token
+               path.equals("/api/auth/exchange") ||
+               path.equals("/api/design/bootstrap");  // Allow bootstrap without access token
     }
 }
